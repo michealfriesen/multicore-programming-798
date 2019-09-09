@@ -7,12 +7,12 @@
 
 using namespace std;
 
-void CoutThreadPrint() {
-   cout << this_thread::get_id() << " Hello World!\n"; 
+void CoutThreadPrint(int i) {
+   cout << i << " Hello World!\n"; 
 }
 
-void PrintfThreadPrint() {
-    printf("%d Hello World!\n", this_thread::get_id());
+void PrintfThreadPrint(int i) {
+    printf("%d Hello World!\n", i);
 }
 
 enum PrintMode { PRINTF, COUT, UNSET }; 
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    void (*print_func_ptr)();
+    void (*print_func_ptr)(int);
 
     if (threadNum < 1){
         cout << "Less than 1 thread specified! Exiting...";
@@ -54,16 +54,15 @@ int main(int argc, char* argv[]) {
             return 1;
     }
 
-    vector<thread> thread_list;
-    thread_list.reserve(threadNum);
+    thread * threadList[threadNum];
     
     // Create all threads for the amount passed via CLI and set them to print via the specified type.
-    for (int i = 0; i < threadNum; i++) {
-        thread_list.push_back(thread(print_func_ptr));
+    for (int threadId = 0; threadId < threadNum; threadId++) {
+        threadList[threadId] = new thread(print_func_ptr, threadId);
     }
 
     for (int i = 0; i < threadNum; i++) {
-        thread_list[i].join();
+        threadList[i] -> join();
     }
 
     return 0;
