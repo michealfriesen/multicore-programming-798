@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/bin/bash
 rm results.csv;
 for file in ./*.txt 
 do
