@@ -1,0 +1,335 @@
+cmd=LD_PRELOAD=../../../lib/libjemalloc.so timeout 600 numactl --interleave=all time ../../bin/ubench_sigouin_int_bst_kcas_unbalanced.alloc_new.reclaim_debra.pool_none.out -nwork 144 -nprefill 144 -i 25 -d 25 -rq 0 -rqsize 1 -k 200000 -nrq 0 -t 30000 -pin 0-23,96-119,24-47,120-143,48-71,144-167,72-95,168-191
+step=10159
+fname=int_kcas_bst_exp1_scaling/step10159.txt
+binary=../../bin/ubench_sigouin_int_bst_kcas_unbalanced.alloc_new.reclaim_debra.pool_none.out
+parsed custom binding: 0-23,96-119,24-47,120-143,48-71,144-167,72-95,168-191
+DS_TYPENAME=sigouin_int_bst_kcas_unbalanced
+FIND_FUNC=FIND_FUNC
+INSERT_FUNC=insertIfAbsent
+ERASE_FUNC=ERASE_FUNC
+RQ_FUNC=RQ_FUNC
+RECLAIM=reclaimer_debra
+ALLOC=allocator_new
+POOL=pool_none
+MILLIS_TO_RUN=30000
+INS=25
+DEL=25
+RQ=0
+RQSIZE=1
+MAXKEY=200000
+PREFILL_THREADS=144
+TOTAL_THREADS=144
+WORK_THREADS=144
+RQ_THREADS=0
+PERF_PMU_EVENT=
+WIDTH_SEQ=48
+sizes: node=40
+ACTUAL_THREAD_BINDINGS=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167
+
+
+sum_transaction_big_total_total=
+sum_transaction_small_total_total=
+sum_transaction_big_failure_total=
+sum_transaction_small_failure_total=
+sum_transaction_success_total=
+sum_transaction_failure_total_total=
+sum_transaction_failure_conflict_total=
+sum_transaction_failure_capacity_total=
+sum_transaction_failure_explicit_total=
+sum_transaction_failure_other_total=
+sum_kcas_insert_success_total=
+sum_kcas_insert_failure_total=
+sum_kcas_erase_success_total=
+sum_kcas_erase_failure_total=
+sum_num_rebalance_success_total=
+sum_num_rebalance_failure_total=
+sum_num_height_adjust_attempted_total=
+sum_num_height_adjust_success_total=
+sum_num_height_adjust_failure_total=
+sum_num_height_adjust_unnecessary_total=
+sum_path_validation_success_total=
+sum_path_validation_failure_total=
+sum_successor_validation_success_total=
+sum_successor_validation_failure_total=
+sum_num_rebalance_attempted_total=
+sum_num_rebalance_completed_total=
+first_node_allocated_addresses_by_index=
+first_descriptor_allocated_addresses_by_index=
+first_extra_type1_allocated_addresses_by_index=
+first_extra_type2_allocated_addresses_by_index=
+first_extra_type3_allocated_addresses_by_index=
+first_extra_type4_allocated_addresses_by_index=
+sum_num_inserts_total=5943219
+sum_num_deletes_total=5943298
+sum_num_searches_total=
+sum_num_rq_total=
+sum_num_operations_by_thread=85025 86965 85136 86839 87123 84915 85237 84661 86639 85485 86212 85822 84342 85644 86899 86147 83750 85089 85377 85245 85853 85746 86053 86237 86060 84942 84707 85799 86599 85723 84926 84906 86368 85231 85795 85263 84166 86270 85804 84777 84642 85443 85079 85022 85402 85048 86614 86318 85382 84001 84881 83580 83489 84017 84040 84976 84499 84302 85850 82874 85762 85282 84874 85427 85136 83791 85163 83311 85300 83477 83675 83869 85307 83940 85699 83532 83648 83621 84038 84815 86040 85008 85563 84418 85007 84467 83332 86162 85576 83354 84284 84242 84657 84225 83651 83681 74319 79296 74863 76964 80255 78077 77899 81471 77829 82821 79378 80848 79853 77539 78338 80671 79908 74515 73879 74900 73360 75161 73822 74442 75613 78996 75078 77419 81374 77731 78792 81033 77991 83064 78847 80687 79366 77605 78093 80450 80681 74044 74815 74858 73896 75426 73777 73903
+average_num_operations_total=82545
+stdev_num_operations_total=329
+sum_num_operations_total=11886517
+min_num_operations_total=73360
+max_num_operations_total=87123
+
+log_histogram_of_none_limbo_reclamation_event_size_full_data=1:0 2:0 4:0 8:0 16:0 32:1 64:143 128:2225 256:7567
+    (2^05, 2^06]: 1
+    (2^06, 2^07]: 143
+    (2^07, 2^08]: 2225
+    (2^08, 2^09]: 7567
+sum_limbo_reclamation_event_size_total=2816378
+sum_pool_cpu_get_total=
+sum_pool_cpu_add_total=
+sum_move_block_reclaimer_to_cpu_total=
+sum_move_block_cpu_to_node_total=
+sum_move_block_node_to_global_total=
+sum_move_block_global_to_alloc_total=
+sum_move_block_alloc_to_cpu_total=
+sum_move_block_global_to_cpu_total=
+sum_move_block_node_to_cpu_total=
+sum_num_bail_from_addkv_at_depth_by_index=
+sum_num_bail_from_build_at_depth_by_index=
+sum_num_help_subtree_total=
+sum_num_try_rebuild_at_depth_by_index=
+sum_num_complete_rebuild_at_depth_by_index=
+sum_num_help_rebuild_total=
+
+log_histogram_of_none_num_prop_epoch_latency_full_data=1:0 2:0 4:0 8:0 16:0 32:0 64:0 128:0 256:0 512:0 1024:0 2048:0 4096:0 8192:0 16384:0 32768:0 65536:0 131072:0 262144:0 524288:0 1048576:0 2097152:1 4194304:0 8388608:1 16777216:6 33554432:16 67108864:23 134217728:24
+    (2^21, 2^22]: 1
+    (2^22, 2^23]: 0
+    (2^23, 2^24]: 1
+    (2^24, 2^25]: 6
+    (2^25, 2^26]: 16
+    (2^26, 2^27]: 23
+    (2^27, 2^28]: 24
+average_num_prop_epoch_latency_total=107830558
+stdev_num_prop_epoch_latency_total=7384004
+min_num_prop_epoch_latency_total=2624569
+max_num_prop_epoch_latency_total=233390119
+
+log_histogram_of_none_bag_rotation_reclaim_size_full_data=1:0
+    [2^00, 2^01]: 0
+
+log_histogram_of_none_token_received_time_split_ms_full_data=1:0
+    [2^00, 2^01]: 0
+first_token_received_time_last_ms_by_thread=
+
+log_histogram_of_none_bag_rotation_duration_split_ms_full_data=1:0
+    [2^00, 2^01]: 0
+first_bag_curr_size_by_thread=
+first_bag_last_size_by_thread=
+first_token_counts_by_thread=
+first_thread_announced_epoch_by_index=142
+sum_elapsed_rebuild_depth_by_index=
+sum_elapsed_rebuild_depth_total=
+sum_elapsed_all_ops_total=
+sum_rebuild_is_subsumed_total=
+sum_rebuild_is_subsumed_at_depth_by_index=
+first_time_thread_terminate_by_thread=
+min_time_thread_terminate_total=
+max_time_thread_terminate_total=
+first_time_thread_start_by_thread=
+min_time_thread_start_total=
+max_time_thread_start_total=
+finished prefilling to size 99503 for expected size 100000 keysum=9953102472, performing 11886517 successful updates in 0.199 seconds (total time 0.243s)
+pref_size=99503
+prefill_elapsed_ms=357
+main thread: starting timer...
+
+###############################################################################
+################################ BEGIN RUNNING ################################
+###############################################################################
+
+
+###############################################################################
+################################## TIME IS UP #################################
+###############################################################################
+
+joining threads...
+###############################################################################
+################################# END RUNNING #################################
+###############################################################################
+
+30s
+gstats_timer_elapsed timer_bag_rotation_start=29.9538
+PRODUCING OUTPUT
+computing tree_stats in PARALLEL...
+bounded depth BFS to partition into subtrees for parallel computation (192 threads)...
+partitioned into 1250 subtrees; running parallel for...
+computing stats for the top of the tree (above the partitions)...
+
+tree_stats_computeWalltime=0.086s
+
+tree_stats_numInternalsAtDepth=1 2 4 8 16 32 62 114 216 379 671 1137 1849 2791 3857 4977 5807 6232 6256 5970 5401 4541 3755 2896 2160 1610 1188 942 698 503 335 198 117 70 56 56 53 47 51 43 38 38 37 41 40 43 37 32 26 19 17 15 16 16 15 15 15 14 9 8 1 0
+tree_stats_numLeavesAtDepth=0 0 0 0 0 0 1 5 8 27 46 112 213 512 955 1453 2219 2842 3329 3417 3404 3315 2764 2438 1906 1410 1082 742 629 450 343 255 144 87 42 31 30 38 24 33 25 19 21 17 21 20 25 20 22 19 10 10 8 8 13 10 9 6 10 6 7 1
+tree_stats_numNodesAtDepth=1 2 4 8 16 32 63 119 224 406 717 1249 2062 3303 4812 6430 8026 9074 9585 9387 8805 7856 6519 5334 4066 3020 2270 1684 1327 953 678 453 261 157 98 87 83 85 75 76 63 57 58 58 61 63 62 52 48 38 27 25 24 24 28 25 24 20 19 14 8 1
+tree_stats_numKeysAtDepth=1 2 4 8 16 32 63 119 224 406 717 1249 2062 3303 4812 6430 8026 9074 9585 9387 8805 7856 6519 5334 4066 3020 2270 1684 1327 953 678 453 261 157 98 87 83 85 75 76 63 57 58 58 61 63 62 52 48 38 27 25 24 24 28 25 24 20 19 14 8 1
+tree_stats_avgDegreeAtDepth=3 3 3 3 3 2.96875 2.88889 2.88235 2.8125 2.76601 2.74198 2.65092 2.60184 2.45686 2.33624 2.24821 2.13058 2.05631 1.97934 1.938 1.89222 1.82981 1.81822 1.76228 1.74274 1.75166 1.74185 1.788 1.71816 1.71144 1.66814 1.57616 1.60153 1.6242 1.88776 1.95402 2.0241 1.88235 2.01333 1.82895 1.90476 2.01754 2 2.05172 2.03279 1.98413 1.83871 1.92308 1.79167 1.71053 1.92593 1.96 2 2.16667 1.89286 1.96 1.83333 1.95 1.73684 1.57143 1.125 1
+
+tree_stats_height=62
+tree_stats_numInternals=65593
+tree_stats_numLeaves=34613
+tree_stats_numNodes=100206
+tree_stats_numKeys=100206
+
+tree_stats_avgDegreeInternal=1.52769
+tree_stats_avgDegreeLeaves=2.89504
+tree_stats_avgDegree=2
+tree_stats_avgKeyDepth=19.4241
+
+sum_transaction_big_total_total=
+sum_transaction_small_total_total=
+sum_transaction_big_failure_total=
+sum_transaction_small_failure_total=
+sum_transaction_success_total=
+sum_transaction_failure_total_total=
+sum_transaction_failure_conflict_total=
+sum_transaction_failure_capacity_total=
+sum_transaction_failure_explicit_total=
+sum_transaction_failure_other_total=
+sum_kcas_insert_success_total=
+sum_kcas_insert_failure_total=
+sum_kcas_erase_success_total=
+sum_kcas_erase_failure_total=
+sum_num_rebalance_success_total=
+sum_num_rebalance_failure_total=
+sum_num_height_adjust_attempted_total=
+sum_num_height_adjust_success_total=
+sum_num_height_adjust_failure_total=
+sum_num_height_adjust_unnecessary_total=
+sum_path_validation_success_total=
+sum_path_validation_failure_total=
+sum_successor_validation_success_total=
+sum_successor_validation_failure_total=
+sum_num_rebalance_attempted_total=
+sum_num_rebalance_completed_total=
+first_node_allocated_addresses_by_index=
+first_descriptor_allocated_addresses_by_index=
+first_extra_type1_allocated_addresses_by_index=
+first_extra_type2_allocated_addresses_by_index=
+first_extra_type3_allocated_addresses_by_index=
+first_extra_type4_allocated_addresses_by_index=
+sum_num_inserts_total=601701844
+sum_num_deletes_total=601622518
+sum_num_searches_total=1203336427
+sum_num_rq_total=
+sum_num_operations_by_thread=16711515 16769703 16833452 16864571 16813533 16738845 16736616 16740418 16844636 16832893 16779382 16731990 16720573 16738095 16869448 16888846 16834186 16803208 16737611 16771042 16835981 16821366 16733843 16692232 16723423 16769842 16788245 16808654 16730671 16641473 16697231 16787219 16858707 16816964 16762670 16687658 16704030 16726833 16787196 16776192 16762947 16723765 16674125 16742205 16813835 16858845 16784558 16740303 16699458 16717164 16796308 16823481 16757927 16764324 16742570 16762777 16828649 16829142 16754924 16698115 16744528 16728692 16777059 16795604 16737198 16646627 16637825 16687578 16781957 16757196 16702705 16717307 16668240 16721060 16772680 16784518 16743820 16684086 16732391 16745089 16824206 16865837 16794804 16715121 16735693 16736926 16806250 16783883 16789290 16700223 16699142 16734639 16807204 16734151 16711626 16664290 16479530 16502151 16599350 16619639 16658858 16580036 16554426 16595503 16693741 16659887 16602472 16545825 16577274 16577316 16655718 16654146 16615636 16523893 16555152 16608286 16673423 16694739 16644788 16554768 16547749 16563245 16607122 16646045 16687724 16623912 16582129 16627339 16737223 16736099 16644657 16620529 16614028 16650578 16719258 16706656 16675549 16580430 16593068 16612077 16703554 16689579 16634225 16575597
+average_num_operations_total=16712922
+stdev_num_operations_total=7227
+sum_num_operations_total=2406660789
+min_num_operations_total=16479530
+max_num_operations_total=16888846
+
+log_histogram_of_none_limbo_reclamation_event_size_full_data=1:1 2:0 4:5 8:11 16:22 32:28 64:39 128:44247 256:922652 512:243
+    [2^00, 2^01]: 1
+    (2^01, 2^02]: 0
+    (2^02, 2^03]: 5
+    (2^03, 2^04]: 11
+    (2^04, 2^05]: 22
+    (2^05, 2^06]: 28
+    (2^06, 2^07]: 39
+    (2^07, 2^08]: 44247
+    (2^08, 2^09]: 922652
+    (2^09, 2^10]: 243
+sum_limbo_reclamation_event_size_total=300841218
+sum_pool_cpu_get_total=
+sum_pool_cpu_add_total=
+sum_move_block_reclaimer_to_cpu_total=
+sum_move_block_cpu_to_node_total=
+sum_move_block_node_to_global_total=
+sum_move_block_global_to_alloc_total=
+sum_move_block_alloc_to_cpu_total=
+sum_move_block_global_to_cpu_total=
+sum_move_block_node_to_cpu_total=
+sum_num_bail_from_addkv_at_depth_by_index=
+sum_num_bail_from_build_at_depth_by_index=
+sum_num_help_subtree_total=
+sum_num_try_rebuild_at_depth_by_index=
+sum_num_complete_rebuild_at_depth_by_index=
+sum_num_help_rebuild_total=
+
+log_histogram_of_none_num_prop_epoch_latency_full_data=1:0 2:0 4:0 8:0 16:0 32:0 64:0 128:0 256:0 512:0 1024:0 2048:0 4096:0 8192:0 16384:0 32768:0 65536:0 131072:0 262144:0 524288:0 1048576:0 2097152:0 4194304:24 8388608:43 16777216:183 33554432:273 67108864:501 134217728:763 268435456:1151 536870912:1144 1073741824:680 2147483648:147 4294967296:19
+    (2^22, 2^23]: 24
+    (2^23, 2^24]: 43
+    (2^24, 2^25]: 183
+    (2^25, 2^26]: 273
+    (2^26, 2^27]: 501
+    (2^27, 2^28]: 763
+    (2^28, 2^29]: 1151
+    (2^29, 2^30]: 1144
+    (2^30, 2^31]: 680
+    (2^31, 2^32]: 147
+    (2^32, 2^33]: 19
+average_num_prop_epoch_latency_total=622787845
+stdev_num_prop_epoch_latency_total=314926
+min_num_prop_epoch_latency_total=4201434
+max_num_prop_epoch_latency_total=8142799635
+
+log_histogram_of_none_bag_rotation_reclaim_size_full_data=1:0
+    [2^00, 2^01]: 0
+
+log_histogram_of_none_token_received_time_split_ms_full_data=1:0
+    [2^00, 2^01]: 0
+first_token_received_time_last_ms_by_thread=
+
+log_histogram_of_none_bag_rotation_duration_split_ms_full_data=1:0
+    [2^00, 2^01]: 0
+first_bag_curr_size_by_thread=
+first_bag_last_size_by_thread=
+first_token_counts_by_thread=
+first_thread_announced_epoch_by_index=13582
+sum_elapsed_rebuild_depth_by_index=
+sum_elapsed_rebuild_depth_total=
+sum_elapsed_all_ops_total=
+sum_rebuild_is_subsumed_total=
+sum_rebuild_is_subsumed_at_depth_by_index=
+first_time_thread_terminate_by_thread=30000008 30000001 30000010 30000003 30000007 30000006 30000003 30000001 30000003 30000003 30000006 30000003 30000000 30000004 30000001 30000006 30000000 30000002 30000008 30000001 30000003 30000008 30000002 30000001 30000008 30000001 30000010 30000003 30000007 30000006 30000003 30000007 30000003 30000003 30000000 30000003 30000000 30000004 30000007 30000006 30000006 30000002 30000008 30000001 30000003 30000003 30000002 30000001 30000003 30000005 30000006 30000009 30000006 30000004 30000011 30000004 30000010 30000009 30000013 30000004 30000002 30000012 30000009 30000006 30000004 30000002 30000002 30000004 30000009 30000013 30000005 30000005 30000003 30000003 30000006 30000004 30000006 30000004 30000011 30000004 30000004 30000009 30000009 30000004 30000002 30000012 30000009 30000012 30000004 30000002 30000002 30000004 30000009 30000009 30000005 30000005 30000011 30000001 30000003 30000002 30000002 30000009 30000002 30000004 30000006 30000005 30000010 30000008 30000005 30000002 30000002 30000002 30000007 30000006 30000002 30000007 30000013 30000004 30000004 30000008 30000005 30000001 30000003 30000002 30000002 30000009 30000002 30000004 30000006 30000005 30000014 30000008 30000005 30000002 30000002 30000001 30000007 30000006 30000002 30000007 30000000 30000004 30000004 30000008
+min_time_thread_terminate_total=30000000
+max_time_thread_terminate_total=30000014
+first_time_thread_start_by_thread=1 1 2 1 2 1 1 2 1 1 1 2 1 1 2 1 1 2 1 2 1 1 1 0 1 1 2 1 2 1 1 2 1 1 1 2 1 1 2 1 1 2 1 2 1 1 1 5 2 1 1 2 2 2 2 2 2 2 2 2 2 3 3 2 2 2 2 3 2 3 2 2 2 1 1 2 2 2 2 2 2 2 2 2 2 3 3 2 2 2 2 3 2 3 2 2 3 2 2 2 2 2 2 2 2 3 3 2 2 2 3 3 2 2 2 2 3 2 2 2 3 2 3 2 2 2 2 2 2 3 3 2 2 2 3 3 2 2 2 2 3 2 2 2
+min_time_thread_start_total=1
+max_time_thread_start_total=5
+
+
+threads_final_keysum=10020647069
+threads_final_size=100206
+final_keysum=10020647069
+final_size=100206
+validate_result=success
+Validation OK.
+Structural validation OK.
+
+total_find=1203336427
+total_rq=0
+total_inserts=601701844
+total_deletes=601622518
+total_updates=1203324362
+total_queries=1203336427
+total_ops=2406660789
+find_throughput=40111214
+rq_throughput=0
+update_throughput=40110812
+query_throughput=40111214
+total_throughput=80222026
+
+
+total find                    : 1203336427
+total rq                      : 0
+total inserts                 : 601701844
+total deletes                 : 601622518
+total updates                 : 1203324362
+total queries                 : 1203336427
+total ops                     : 2406660789
+find throughput               : 40111214
+rq throughput                 : 0
+update throughput             : 40110812
+query throughput              : 40111214
+total throughput              : 80222026
+
+elapsed milliseconds          : 30000
+napping milliseconds overtime : 0
+
+WARNING: NDEBUG is not defined, so experiment results may be affected by assertions and debug code.
+garbage=0
+total_execution_walltime=30.679s
+4362.97user 4.49system 0:30.86elapsed 14148%CPU (0avgtext+0avgdata 1107044maxresident)k
+0inputs+17072outputs (0major+293224minor)pagefaults 0swaps
+maxresident_mb=1107
