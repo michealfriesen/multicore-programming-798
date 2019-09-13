@@ -34,5 +34,5 @@ def main():
                 resultsDict[testType] = []
             print("Adding thread count %d for test type %s" % (threadCount, testType))
             resultsDict[testType].append((int(os.popen((bashScriptMaker(threadCount, testTime, testType))).read()), threadCount))
-    print(resultsDict)
+    graphMaker(resultsDict)
 main()
