@@ -1,8 +1,8 @@
 import os
 
 # Variable for the test
-testTime = 2000
-threadCountList = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+testTime = 1000
+threadCountList = [1, 2, 4, 8]
 testTypeList = ["naive", "lock", "faa"]
 
 resultsDict = {}
@@ -16,6 +16,7 @@ def main():
         for threadCount in threadCountList:
             if testType not in resultsDict:
                 resultsDict[testType] = []
+            print("Adding thread count %d for test type %s" % (threadCount, testType))
             resultsDict[testType].append(int(os.popen((bashScriptMaker(threadCount, testTime, testType))).read()))
     
     print(resultsDict)
