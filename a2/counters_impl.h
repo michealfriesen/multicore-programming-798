@@ -80,8 +80,7 @@ private:
     char padding2[64];
 
     // flush threshold
-    int flushThreshold;
-    char padding3[64];
+    int flushThreshold; //No padding because it is read only
 
 public:
     CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
