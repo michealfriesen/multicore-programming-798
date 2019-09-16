@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <thread>
 
 #define MAX_THREADS 256
 
@@ -26,12 +27,12 @@ private:
     std::mutex counterMutex;
     /** Adding padding to prevent false sharing in the test suite
         (Even though my threads are constrained by the mutex) */
-    char padding2[64];
+    char padding0[64];
     int counter;
-    char padding3[64];
+    char padding1[64];
 
 public:
-    CounterLocked(int _numThreads) {}
+    CounterLocked(int _numThreads) : counter(0) {}
     int64_t inc(int tid) {
         counterMutex.lock();
         int prevValue = counter++;
@@ -48,36 +49,59 @@ public:
 
 class CounterFetchAndAdd {
 private:
-    std::mutex counterMutex;
-    char padding4[64];
+    char padding0[64];
     atomic<int> counter;
-    char padding5[64];
+    char padding1[64];
 
 public:
-    CounterFetchAndAdd(int _numThreads) {}
+    CounterFetchAndAdd(int _numThreads) : counter(0) {}
     int64_t inc(int tid) {
-        counterMutex.lock();
         int prevValue = counter++;
-        counterMutex.unlock();
         return prevValue;
     }
     int64_t read() {
-        counterMutex.lock();
-        int currentValue = counter;
-        counterMutex.unlock();
-        return currentValue;
+        return counter;
     }
 };
 
 
 class CounterApproximate {
 private:
+    // list of counters equal to the max number of threads
+    struct padded_counter {
+        atomic<int> c;
+        char padding[64-sizeof(atomic<int>)];
+    };
+    padded_counter counterList[MAX_THREADS];
+    
+    // global counter that is padded
+    char padding1[64];
+    atomic<int> gCounter;
+    char padding2[64];
+
+    // flush threshold
+    int flushThreshold;
+    char padding3[64];
+
 public:
-    CounterApproximate(int _numThreads) {
+    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
+        // Initialize the counter array
+        for (int threadId=0; threadId < _numThreads; ++threadId) {
+            new (&counterList[threadId]) atomic<int>(0);
+        }
     }
     int64_t inc(int tid) {
+        // Increment the counter you are assigned to 
+        counterList[tid].c++;
+
+        // If the threshold has been reached, fetch and add then flush the local counter to the global counter
+        if(counterList[tid].c >= flushThreshold) {
+            gCounter += counterList[tid].c;
+            counterList[tid].c = 0;
+        }
     }
     int64_t read() {
+        return gCounter;
     }
 };
 
