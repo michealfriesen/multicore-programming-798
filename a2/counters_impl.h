@@ -85,9 +85,10 @@ private:
 
 public:
     CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
+        std::cout << flushThreshold;
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            counterList[threadId].c = 0;
+            new (&counterList[threadId]) int(0);
         }
     }
     int64_t inc(int tid) {
