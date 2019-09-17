@@ -77,7 +77,7 @@ private:
     padded_counter counterList[MAX_THREADS];
 
     std::mutex gCounterMutex;
-    int gCounter;
+    uint64_t gCounter;
     char padding1[64 - sizeof(int)];
 
     // flush threshold
