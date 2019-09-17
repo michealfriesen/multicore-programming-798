@@ -76,8 +76,9 @@ private:
     };
     padded_counter counterList[MAX_THREADS];
 
-    atomic<int> gCounter;
-    char padding1[64];
+    std::mutex gCounterMutex;
+    int gCounter;
+    char padding1[64 - sizeof(int)];
 
     // flush threshold
     int flushThreshold; //No padding because it is read only
@@ -92,8 +93,10 @@ public:
     int64_t inc(int tid) {
         // Increment the counter you are assigned to 
         if(++counterList[tid].c >= flushThreshold) {
+            gCounterMutex.lock();
             gCounter += counterList[tid].c;
             counterList[tid].c = 0;
+            gCounterMutex.unlock();
         }
     }
     int64_t read() {
