@@ -86,15 +86,12 @@ public:
     CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) atomic<int>(0);
+            counterList[threadId].c = 0;
         }
     }
     int64_t inc(int tid) {
         // Increment the counter you are assigned to 
-        counterList[tid].c++;
-
-        // If the threshold has been reached, fetch and add then flush the local counter to the global counter
-        if(counterList[tid].c >= flushThreshold) {
+        if(++counterList[tid].c >= flushThreshold) {
             gCounter += counterList[tid].c;
             counterList[tid].c = 0;
         }
@@ -109,18 +106,18 @@ class CounterShardedLocked {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        atomic<int> c; // Not atomic because we are locking it every time anyways
-        char padding[64-sizeof(atomic<int>)];
+        int c; // Not atomic because we are locking it every time anyways
+        char padding[64];
         std::mutex counterMutex;
     };
     padded_counter counterList[MAX_THREADS];
     int numThreads; // Used for getting only the amount of active threads there are.
 
 public:
-    CounterShardedLocked(int _numThreads) : numThreads(0) {
+    CounterShardedLocked(int _numThreads) : numThreads(_numThreads) {
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) atomic<int>(0);
+            new (&counterList[threadId]) int (0);
         }
     }
     int64_t inc(int tid) {
@@ -131,9 +128,7 @@ public:
     int64_t read() {
         int currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
-            counterList[threadId].counterMutex.lock();
             currentVal += counterList[threadId].c;
-            counterList[threadId].counterMutex.unlock();
         }
         return currentVal;
     }
@@ -145,16 +140,16 @@ private:
     // list of counters equal to the max number of threads
     struct padded_counter {
         atomic<int> c; // Not atomic because we are locking it every time anyways
-        char padding[64-sizeof(atomic<int>)];
+        char padding[64 - sizeof(atomic<int>)];
     };
     padded_counter counterList[MAX_THREADS];
     int numThreads;
 
 public:
-    CounterShardedWaitfree(int _numThreads) : numThreads(0) {
+    CounterShardedWaitfree(int _numThreads) : numThreads(_numThreads) {
     // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) atomic<int>(0);
+            new (&counterList[threadId]) int(0);
         }
     }
     int64_t inc(int tid) {
@@ -163,7 +158,7 @@ public:
     int64_t read() {
         int currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
-            currentVal += counterList[threadId].c;
+            currentVal = counterList[threadId].c + currentVal;
         }
         return currentVal;
     }
