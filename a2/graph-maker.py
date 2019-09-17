@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 # Variable for the test
 testTime = 1000
-threadCountList = [1, 2, 4, 8]
-testTypeList = ["shard_lock", "shard_wf"]
+threadCountList = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+testTypeList = ["lock", "shard_lock", "shard_wf"]
 
 resultsDict = {}
 
@@ -20,9 +20,11 @@ def graphMaker(dataDict):
     
     num = 0 # Allows for color change for each data type
     for dataType, data in dataDict.items():
-        plt.plot(data[0], data[1], marker='.', color=palette(num), linewidth=1, label=dataType)
+        unzippedList = list(zip(*data))
+        plt.plot(unzippedList[1], unzippedList[0], marker='.', color=palette(num), linewidth=1, label=dataType)
         num += 1
 
+    print(dataDict)
     plt.legend()
     plt.show()
 
