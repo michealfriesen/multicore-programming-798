@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 # Variable for the test
 testTime = 1000
-threadCountList = [8, 16, 32, 64, 128, 256]
-testTypeList = ["naive", "lock", "faa"]
+threadCountList = [1, 2, 4, 8]
+testTypeList = ["shard_lock", "shard_wf"]
 
 resultsDict = {}
 
