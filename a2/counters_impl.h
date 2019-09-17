@@ -65,19 +65,19 @@ public:
 };
 
 
+
+
 class CounterApproximate {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        atomic<int> c;
+        int c; // each are private so threads shouldnt need to compete...
         char padding[64-sizeof(atomic<int>)];
     };
     padded_counter counterList[MAX_THREADS];
-    
-    // global counter that is padded
-    char padding1[64];
+
     atomic<int> gCounter;
-    char padding2[64];
+    char padding1[64];
 
     // flush threshold
     int flushThreshold; //No padding because it is read only
@@ -86,7 +86,7 @@ public:
     CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) atomic<int>(0);
+            counterList[threadId].c = 0;
         }
     }
     int64_t inc(int tid) {
