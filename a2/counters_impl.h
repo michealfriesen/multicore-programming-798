@@ -140,28 +140,31 @@ class CounterShardedWaitfree {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        atomic<int> c; // Not atomic because we are locking it every time anyways
-        char padding[64 - sizeof(atomic<int>)];
+        atomic<uint64_t> c;
+        char padding[64 - sizeof(atomic<uint64_t>)];
     };
     padded_counter counterList[MAX_THREADS];
+    atomic<uint64_t> counter;
+    char padding1 [64 - sizeof(atomic<uint64_t>)]; 
+    
     int numThreads;
 
 public:
     CounterShardedWaitfree(int _numThreads) : numThreads(_numThreads) {
     // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) int(0);
+            new (&counterList[threadId]) atomic<uint64_t>(0);
         }
     }
     int64_t inc(int tid) {
         counterList[tid].c++;
     }
     int64_t read() {
-        int currentVal = 0;
-        for (int threadId = 0; threadId < numThreads; ++threadId) {
-            currentVal = counterList[threadId].c + currentVal;
-        }
-        return currentVal;
+	for (int threadId = 0; threadId < numThreads; ++threadId) {
+              	counter += counterList[threadId].c;
+	    }
+        
+        return counter;
     }
 };
 
