@@ -140,12 +140,10 @@ class CounterShardedWaitfree {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        atomic<int> c; // Atomic because we need to fetch and add during the for loop
+        int c; // Not atomic because we only have private counters and we are only reading to a local variabel
         char padding[64 - sizeof(atomic<int64_t>)];
     };
     padded_counter counterList[MAX_THREADS];
-    atomic<int64_t> counter;
-    char padding1 [64 - sizeof(atomic<int64_t>)];
     int numThreads;
 
 public:
@@ -159,6 +157,7 @@ public:
         counterList[tid].c++;
     }
     int64_t read() {
+        int64_t counter;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             counter += counterList[threadId].c;
         }
