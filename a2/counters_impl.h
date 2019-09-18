@@ -10,7 +10,7 @@
 class CounterNaive {
 private:
     char padding0[64];
-    int v;
+    int64_t v;
     char padding1[64];
 public:
     CounterNaive(int _numThreads) : v(0) {}
@@ -28,7 +28,7 @@ private:
     /** Adding padding to prevent false sharing in the test suite
         (Even though my threads are constrained by the mutex) */
     char padding0[64];
-    int counter;
+    int64_t counter;
     char padding1[64];
 
 public:
@@ -71,14 +71,14 @@ class CounterApproximate {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        uint64_t c; // each are private so threads shouldnt need to compete...
-        char padding[64-sizeof(atomic<uint64_t>)];
+        int64_t c; // each are private so threads shouldnt need to compete...
+        char padding[64-sizeof(int64_t)];
     };
     padded_counter counterList[MAX_THREADS];
 
     std::mutex gCounterMutex;
-    uint64_t gCounter;
-    char padding1[64 - sizeof(uint64_t)];
+    int64_t gCounter;
+    char padding1[64 - sizeof(int64_t)];
 
     // flush threshold
     int flushThreshold; //No padding because it is read only
@@ -87,7 +87,7 @@ public:
     CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 100){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) uint64_t(0);
+            new (&counterList[threadId]) int64_t(0);
         }
     }
     int64_t inc(int tid) {
@@ -95,7 +95,7 @@ public:
         if(++counterList[tid].c >= flushThreshold) {
             gCounter += counterList[tid].c;
             counterList[tid].c = 0;
-     	}
+        }
     }
     int64_t read() {
         return gCounter;
@@ -107,8 +107,8 @@ class CounterShardedLocked {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        uint64_t c; // Not atomic because we are locking it every time anyways
-        char padding[64-sizeof(uint64_t)];
+        int64_t c; // Not atomic because we are locking it every time anyways
+        char padding[64 - sizeof(int64_t)];
         std::mutex counterMutex;
     };
     padded_counter counterList[MAX_THREADS];
@@ -118,7 +118,7 @@ public:
     CounterShardedLocked(int _numThreads) : numThreads(_numThreads) {
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) uint64_t (0);
+            new (&counterList[threadId]) int64_t (0);
         }
     }
     int64_t inc(int tid) {
@@ -127,7 +127,7 @@ public:
         counterList[tid].counterMutex.unlock();
     }
     int64_t read() {
-        uint64_t currentVal = 0;
+        int64_t currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             currentVal += counterList[threadId].c;
         }
@@ -140,31 +140,30 @@ class CounterShardedWaitfree {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        atomic<uint64_t> c;
-        char padding[64 - sizeof(atomic<uint64_t>)];
+        atomic<int> c; // Atomic because we need to fetch and add during the for loop
+        char padding[64 - sizeof(atomic<int64_t>)];
     };
     padded_counter counterList[MAX_THREADS];
-    atomic<uint64_t> counter;
-    char padding1 [64 - sizeof(atomic<uint64_t>)]; 
-    
+    atomic<int64_t> counter;
+    char padding1 [64 - sizeof(atomic<int64_t>)]
     int numThreads;
 
 public:
     CounterShardedWaitfree(int _numThreads) : numThreads(_numThreads) {
     // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) atomic<uint64_t>(0);
+            new (&counterList[threadId]) int64_t(0);
         }
     }
     int64_t inc(int tid) {
         counterList[tid].c++;
     }
     int64_t read() {
-	for (int threadId = 0; threadId < numThreads; ++threadId) {
-              	counter += counterList[threadId].c;
-	    }
+        for (int threadId = 0; threadId < numThreads; ++threadId) {
+            counter += counterList[threadId].c;
         
         return counter;
+        }
     }
 };
 
