@@ -73,15 +73,14 @@ private:
     };
     padded_counter counterList[MAX_THREADS];
 
-    std::mutex gCounterMutex;
-    int64_t gCounter;
-    char padding1[64 - sizeof(int64_t)];
+    atomic<int64_t> gCounter;
+    char padding1[64 - sizeof(atomic<int64_t>)];
 
     // flush threshold
     int flushThreshold; //No padding because it is read only
 
 public:
-    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
+    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 50){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
             new (&counterList[threadId]) int64_t(0);
@@ -90,10 +89,8 @@ public:
     int64_t inc(int tid) {
         // Increment the counter you are assigned to 
         if(++counterList[tid].c >= flushThreshold) {
-            gCounterMutex.lock();
 	    gCounter += counterList[tid].c;
             counterList[tid].c = 0;
-	    gCounterMutex.unlock();
         }
     }
     int64_t read() {
@@ -126,10 +123,12 @@ public:
         counterList[tid].counterMutex.unlock();
     }
     int64_t read() {
-        atomic<int64_t> currentVal;
+        int64_t currentVal;
 	currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
-            currentVal += counterList[threadId].c;
+            counterList[threadId].counterMutex.lock();
+	    currentVal += counterList[threadId].c;
+	    counterList[threadId].counterMutex.unlock();	
         }
         return currentVal;
     }
