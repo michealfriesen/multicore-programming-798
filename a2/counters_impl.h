@@ -127,8 +127,10 @@ public:
 	currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             counterList[threadId].counterMutex.lock();
-	    currentVal += counterList[threadId].c;
-	    counterList[threadId].counterMutex.unlock();	
+            currentVal += counterList[threadId].c;
+        }
+        for (int threadId = 0; threadId < numThreads; ++threadId) []
+            counterList[threadId].counterMutex.unlock();	
         }
         return currentVal;
     }
