@@ -81,7 +81,7 @@ private:
     int flushThreshold; //No padding because it is read only
 
 public:
-    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 50){
+    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 10){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
             new (&counterList[threadId]) int64_t(0);
@@ -90,8 +90,10 @@ public:
     int64_t inc(int tid) {
         // Increment the counter you are assigned to 
         if(++counterList[tid].c >= flushThreshold) {
-            gCounter += counterList[tid].c;
+            gCounterMutex.lock();
+	    gCounter += counterList[tid].c;
             counterList[tid].c = 0;
+	    gCounterMutex.unlock();
         }
     }
     int64_t read() {
@@ -124,7 +126,8 @@ public:
         counterList[tid].counterMutex.unlock();
     }
     int64_t read() {
-        int64_t currentVal = 0;
+        atomic<int64_t> currentVal;
+	currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             currentVal += counterList[threadId].c;
         }
@@ -155,6 +158,7 @@ public:
     }
     int64_t read() {
         atomic<int64_t> counter;
+	counter = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             counter += counterList[threadId].c;
         }
