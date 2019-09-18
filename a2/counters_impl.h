@@ -64,9 +64,6 @@ public:
     }
 };
 
-
-
-
 class CounterApproximate {
 private:
     // list of counters equal to the max number of threads
@@ -84,7 +81,7 @@ private:
     int flushThreshold; //No padding because it is read only
 
 public:
-    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 100){
+    CounterApproximate(int _numThreads) : gCounter(0), flushThreshold(_numThreads * 50){
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
             new (&counterList[threadId]) int64_t(0);
