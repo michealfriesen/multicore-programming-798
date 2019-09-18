@@ -145,7 +145,7 @@ private:
     };
     padded_counter counterList[MAX_THREADS];
     atomic<int64_t> counter;
-    char padding1 [64 - sizeof(atomic<int64_t>)]
+    char padding1 [64 - sizeof(atomic<int64_t>)];
     int numThreads;
 
 public:
@@ -160,10 +160,15 @@ public:
     }
     int64_t read() {
         for (int threadId = 0; threadId < numThreads; ++threadId) {
-            counter += counterList[threadId].c;
-        
-        return counter;
+            int64_t currVal = 0;
+            int64_t tmpCounter = 0;
+            do {
+                currVal = counterList[threadId].c;
+                tmpCounter = counter + counterList[threadId].c;
+            }
+            while(!counter.atomic_compare_exchange_weak(currVal, tmpCounter));
         }
+        return counter;
     }
 };
 
