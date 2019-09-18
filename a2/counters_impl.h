@@ -140,7 +140,7 @@ class CounterShardedWaitfree {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        int c; // Not atomic because we only have private counters and we are only reading to a local variabel
+        int64_t c; // Not atomic because we only have private counters and we are only reading to a local variabel
         char padding[64 - sizeof(atomic<int64_t>)];
     };
     padded_counter counterList[MAX_THREADS];
