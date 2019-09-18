@@ -72,13 +72,13 @@ private:
     // list of counters equal to the max number of threads
     struct padded_counter {
         uint64_t c; // each are private so threads shouldnt need to compete...
-        char padding[64-sizeof(atomic<int>)];
+        char padding[64-sizeof(atomic<uint64_t>)];
     };
     padded_counter counterList[MAX_THREADS];
 
     std::mutex gCounterMutex;
     uint64_t gCounter;
-    char padding1[64 - sizeof(int)];
+    char padding1[64 - sizeof(uint64_t)];
 
     // flush threshold
     int flushThreshold; //No padding because it is read only
@@ -107,8 +107,8 @@ class CounterShardedLocked {
 private:
     // list of counters equal to the max number of threads
     struct padded_counter {
-        int c; // Not atomic because we are locking it every time anyways
-        char padding[64];
+        uint64_t c; // Not atomic because we are locking it every time anyways
+        char padding[64-sizeof(uint64_t)];
         std::mutex counterMutex;
     };
     padded_counter counterList[MAX_THREADS];
@@ -118,7 +118,7 @@ public:
     CounterShardedLocked(int _numThreads) : numThreads(_numThreads) {
         // Initialize the counter array
         for (int threadId=0; threadId < _numThreads; ++threadId) {
-            new (&counterList[threadId]) int (0);
+            new (&counterList[threadId]) uint64_t (0);
         }
     }
     int64_t inc(int tid) {
@@ -127,7 +127,7 @@ public:
         counterList[tid].counterMutex.unlock();
     }
     int64_t read() {
-        int currentVal = 0;
+        uint64_t currentVal = 0;
         for (int threadId = 0; threadId < numThreads; ++threadId) {
             currentVal += counterList[threadId].c;
         }
