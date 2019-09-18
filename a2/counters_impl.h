@@ -160,13 +160,7 @@ public:
     }
     int64_t read() {
         for (int threadId = 0; threadId < numThreads; ++threadId) {
-            int64_t currVal = 0;
-            int64_t tmpCounter = 0;
-            do {
-                currVal = counterList[threadId].c;
-                tmpCounter = counter + counterList[threadId].c;
-            }
-            while(!counter.atomic_compare_exchange_weak(currVal, tmpCounter));
+            counter += counterList[threadId].c;
         }
         return counter;
     }
