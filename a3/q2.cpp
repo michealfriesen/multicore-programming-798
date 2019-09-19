@@ -8,8 +8,8 @@ using namespace std;
 #define MAX_THREADS 256
 
 struct padded_subcounter {
-    atomic<int64_t> v;
-    char padding[64 - sizeof(atomic<int64_t>)];
+    int64_t v;
+    char padding[64 - sizeof(int64_t)];
 };
 
 struct globals {
