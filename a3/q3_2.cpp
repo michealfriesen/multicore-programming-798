@@ -9,12 +9,28 @@ __thread int tid;
 
 class mutex_t {
 private:
+    bool enterArray[2];
+    int turn;
 public:
-    mutex_t() {
+    mutex_t() : turn(0) {
+        enterArray[0] = false;
+        enterArray[1] = false;  
     }
-    void lock() {
+    void lock(tid) {
+        enterArray[tid] = true;
+        while(enterArray[1 - tid]) {
+            if(turn != tid){
+                enterArray[tid] = false;
+                while(turn != tid){
+                    // Do nothing...
+                }
+                enterArray[tid] = true;
+            }
+        }
     }
     void unlock() {
+        enterArray[tid] = false;
+        turn = 1 - tid;
     }
 };
 
@@ -24,7 +40,7 @@ private:
     mutex_t m;
     volatile int v;
 public:
-    counter_locked() {
+    counter_locked() : v(0){
         
     }
 
