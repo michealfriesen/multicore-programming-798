@@ -10,13 +10,13 @@ __thread int tid;
 class mutex_t {
 private:
     bool enterArray[2];
-    int turn;
+    atomic<int> turn;
 public:
     mutex_t() : turn(0) {
         enterArray[0] = false;
         enterArray[1] = false;  
     }
-    void lock(tid) {
+    void lock() {
         enterArray[tid] = true;
         while(enterArray[1 - tid]) {
             if(turn != tid){
@@ -26,7 +26,7 @@ public:
                 }
                 enterArray[tid] = true;
             }
-        }
+        } 
     }
     void unlock() {
         enterArray[tid] = false;
@@ -38,7 +38,7 @@ public:
 class counter_locked {
 private:
     mutex_t m;
-    volatile int v;
+    volatile atomic<int> v;
 public:
     counter_locked() : v(0){
         
