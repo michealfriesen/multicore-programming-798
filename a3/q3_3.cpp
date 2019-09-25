@@ -26,7 +26,8 @@ public:
                     // Do nothing... (Busy Wait)
                 }
                 enterArray[tid] = true;
-            }
+            	__sync_synchronize();
+	    }
         } 
     }
     void unlock() {
@@ -52,6 +53,7 @@ public:
 
     int get() {
         m.lock();
+	__sync_synchronize();
         auto result = v;
         m.unlock();
         return result;
