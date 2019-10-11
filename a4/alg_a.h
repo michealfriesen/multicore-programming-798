@@ -52,8 +52,8 @@ AlgorithmA::~AlgorithmA() {
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmA::insertIfAbsent(const int tid, const int & key) {
     uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
-    for (int32_t i = 0; i < capacity; i++) {
-        int32_t index = (h + i) % capacity;
+    for (uint32_t i = 0; i < capacity; i++) {
+        uint32_t index = (h + i) % capacity;
 		data[index].m.lock(); // Locking to check if it is the correct value
         if(data[index].d == key) {
             data[index].m.unlock();
@@ -72,8 +72,8 @@ bool AlgorithmA::insertIfAbsent(const int tid, const int & key) {
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmA::erase(const int tid, const int & key) {
     uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
-    for (int32_t i = 0; i < capacity; i++) {
-        int32_t index = (h + i) % capacity;
+    for (uint32_t i = 0; i < capacity; i++) {
+        uint32_t index = (h + i) % capacity;
         data[index].m.lock(); // Locking to check if it is the correct value
         if(data[index].d == key) {
             data[index].d = TOMBSTONE;
@@ -104,6 +104,17 @@ int64_t AlgorithmA::getSumOfKeys() {
 
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmA::printDebuggingDetails() {
-    // for (int i = 0; i < capacity; i++)
-	// 	cout << data[i].d << endl;
+    int printAmount;
+    if (capacity < 500)
+        printAmount = capacity;
+    else {
+        printAmount = 500;
+    }
+    for (int i = 0; i < printAmount; i++) {
+        if (data[i].d == TOMBSTONE)
+            cout << "T";
+        
+        else 
+            cout << data[i].d;
+    }
 }
