@@ -40,7 +40,7 @@ AlgorithmA::AlgorithmA(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), capacity(_capacity) {
 	data = new paddedData[capacity];
     for (int i = 0; i < _capacity; i++)
-        data[i].d = NULL; // Initalize the data structure.
+        data[i].d = 0; // Initalize the data structure.
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -58,7 +58,7 @@ bool AlgorithmA::insertIfAbsent(const int tid, const int & key) {
             data[index].m.unlock();
             return false;
         }
-        if(data[index].d == NULL) { // Empty
+        if(data[index].d == 0) { // Empty
             data[index].d = key;
             data[index].m.unlock();
             return true;
@@ -79,7 +79,7 @@ bool AlgorithmA::erase(const int tid, const int & key) {
             data[index].m.unlock();
             return true;
         }
-        if(data[index].d == NULL) { // Empty
+        if(data[index].d == 0) { // Empty
             data[index].m.unlock();
             return false;
         }
