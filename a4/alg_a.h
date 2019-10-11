@@ -23,7 +23,8 @@ public:
     paddedData * data;
 
     AlgorithmA(const int _numThreads, const int _capacity);
-    ~AlgorithmA();
+	~AlgorithmA();
+
     bool insertIfAbsent(const int tid, const int & key);
     bool erase(const int tid, const int & key);
     long getSumOfKeys();
@@ -50,10 +51,10 @@ AlgorithmA::~AlgorithmA() {
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmA::insertIfAbsent(const int tid, const int & key) {
-    int32_t h = murmur3(key); // Generate hash that is indexed to our array.
-    for (int i = 0; i < capacity; i++) {
-        int index = (h + i) % capacity;
-        data[index].m.lock(); // Locking to check if it is the correct value
+    uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
+    for (int32_t i = 0; i < capacity; i++) {
+        int32_t index = (h + i) % capacity;
+		data[index].m.lock(); // Locking to check if it is the correct value
         if(data[index].d == key) {
             data[index].m.unlock();
             return false;
@@ -70,9 +71,9 @@ bool AlgorithmA::insertIfAbsent(const int tid, const int & key) {
 
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmA::erase(const int tid, const int & key) {
-    int32_t h = murmur3(key); // Generate hash that is indexed to our array.
-    for (int i = 0; i < capacity; i++) {
-        int index = (h + i) % capacity;
+    uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
+    for (int32_t i = 0; i < capacity; i++) {
+        int32_t index = (h + i) % capacity;
         data[index].m.lock(); // Locking to check if it is the correct value
         if(data[index].d == key) {
             data[index].d = TOMBSTONE;
