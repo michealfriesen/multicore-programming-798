@@ -12,6 +12,7 @@ public:
     const int numThreads;
     int capacity;
     char padding2[PADDING_BYTES];
+    paddedData * data;
 
     AlgorithmB(const int _numThreads, const int _capacity);
     ~AlgorithmB();
@@ -29,30 +30,79 @@ public:
  */
 AlgorithmB::AlgorithmB(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), capacity(_capacity) {
-    
+    data = new paddedData[capacity];
+    for (int i = 0; i < _capacity; i++)
+        data[i].d = 0; // Initalize the data structure.
 }
 
 // destructor: clean up any allocated memory, etc.
 AlgorithmB::~AlgorithmB() {
-    
+    delete data;
 }
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmB::insertIfAbsent(const int tid, const int & key) {
-    return false;
+    uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
+    for (uint32_t i = 0; i < capacity; i++) {
+        uint32_t index = (h + i) % capacity;
+        
+        if(data[index].d == key) {
+            return false; // No need to lock as there is no risk of overwriting
+        }
+
+        if(data[index].d == 0) { // Empty
+            data[index].m.lock(); // Locking to ensure the key does not get overwritten before the change
+            data[index].d = key;
+            data[index].m.unlock();
+            return true;
+        }
+    }
+    return false; // Return false if there was no space, and the key wasn't found.
 }
 
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmB::erase(const int tid, const int & key) {
-    return false;
+    uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
+    for (uint32_t i = 0; i < capacity; i++) {
+        uint32_t index = (h + i) % capacity;
+        
+        if(data[index].d == key) {
+            data[index].m.lock(); // Locking to ensure no overwrites occur.
+            data[index].d = TOMBSTONE;
+            data[index].m.unlock();
+            return true;
+        }
+
+        if(data[index].d == 0) {
+            return false; // Not overwritting due to no issues with overwritting.
+        }
+    }
+    return false; // Return false if there was no space, and the key wasn't found.
 }
 
 // semantics: return the sum of all KEYS in the set
 int64_t AlgorithmB::getSumOfKeys() {
-    return 0;
+	int64_t sum = 0;
+	for (int i = 0; i < capacity; i++) {
+        if(!(data[i].d == TOMBSTONE)) // Make sure the data is not deleted.
+		    sum += data[i].d;
+    }
+	return sum;
 }
 
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmB::printDebuggingDetails() {
-    
+    // int printAmount;
+    // if (capacity < 500)
+    //     printAmount = capacity;
+    // else {
+    //     printAmount = 500;
+    // }
+    // for (int i = 0; i < printAmount; i++) {
+    //     if (data[i].d == TOMBSTONE)
+    //         cout << "*T*";
+        
+    //     else 
+    //         cout << data[i].d;
+    // }
 }

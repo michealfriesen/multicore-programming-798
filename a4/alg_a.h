@@ -94,27 +94,25 @@ int64_t AlgorithmA::getSumOfKeys() {
 	// This is the naive way of adding all the values.
 	int64_t sum = 0;
 	for (int i = 0; i < capacity; i++) {
-        data[i].m.lock();
         if(!(data[i].d == TOMBSTONE)) // Make sure the data is not deleted.
 		    sum += data[i].d;
-        data[i].m.unlock();
     }
 	return sum;
 }
 
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmA::printDebuggingDetails() {
-    int printAmount;
-    if (capacity < 500)
-        printAmount = capacity;
-    else {
-        printAmount = 500;
-    }
-    for (int i = 0; i < printAmount; i++) {
-        if (data[i].d == TOMBSTONE)
-            cout << "T";
+    // int printAmount;
+    // if (capacity < 500)
+    //     printAmount = capacity;
+    // else {
+    //     printAmount = 500;
+    // }
+    // for (int i = 0; i < printAmount; i++) {
+    //     if (data[i].d == TOMBSTONE)
+    //         cout << "*T*";
         
-        else 
-            cout << data[i].d;
-    }
+    //     else 
+    //         cout << data[i].d;
+    // }
 }
