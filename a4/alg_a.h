@@ -7,7 +7,7 @@ using namespace std;
 
 struct paddedData {
     char padding2[PADDING_BYTES];
-    atomic<uint64_t> d;
+    atomic<uint32_t> d;
     mutex m;
     char padding3[PADDING_BYTES];
 };

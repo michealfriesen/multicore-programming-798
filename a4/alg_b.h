@@ -84,8 +84,13 @@ bool AlgorithmB::erase(const int tid, const int & key) {
 int64_t AlgorithmB::getSumOfKeys() {
 	int64_t sum = 0;
 	for (int i = 0; i < capacity; i++) {
-        if(!(data[i].d == TOMBSTONE)) // Make sure the data is not deleted.
+        data[i].m.lock();
+        if(data[i].d == TOMBSTONE){
+        }
+        else {
 		    sum += data[i].d;
+        }
+        data[i].m.unlock();
     }
 	return sum;
 }
