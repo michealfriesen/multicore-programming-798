@@ -3,6 +3,12 @@
 #include <atomic>
 using namespace std;
 
+struct paddedDataNoLock {
+    char padding2[PADDING_BYTES];
+    atomic<uint32_t> d;
+    char padding3[PADDING_BYTES];
+};
+
 class AlgorithmC {
 public:
     static constexpr int TOMBSTONE = -1;
@@ -12,7 +18,7 @@ public:
     int capacity;
     char padding2[PADDING_BYTES];
     
-    paddedData * data;
+    paddedDataNoLock * data;
 
     AlgorithmC(const int _numThreads, const int _capacity);
     ~AlgorithmC();
@@ -30,7 +36,7 @@ public:
  */
 AlgorithmC::AlgorithmC(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), capacity(_capacity) {
-    data = new paddedData[capacity];
+    data = new paddedDataNoLock[capacity];
     for (int i = 0; i < _capacity; i++)
         data[i].d = 0; // Initalize the data structure.
 }
@@ -65,7 +71,7 @@ bool AlgorithmC::insertIfAbsent(const int tid, const int & key) {
 
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmC::erase(const int tid, const int & key) {
-    uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
+    uint32_t h = (murmur3(key)/0xFFFFFFFF); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < capacity; i++) {
         uint32_t index = (h + i) % capacity;
         uint32_t value = data[index].d;
@@ -85,30 +91,28 @@ bool AlgorithmC::erase(const int tid, const int & key) {
 int64_t AlgorithmC::getSumOfKeys() {
     int64_t sum = 0;
 	for (int i = 0; i < capacity; i++) {
-        data[i].m.lock();
         if(data[i].d == TOMBSTONE){
         }
         else {
 		    sum += data[i].d;
         }
-        data[i].m.unlock();
     }
 	return sum;
 }
 
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmC::printDebuggingDetails() {
-    int printAmount;
-    if (capacity < 500)
-        printAmount = capacity;
-    else {
-        printAmount = 500;
-    }
-    for (int i = 0; i < printAmount; i++) {
-        if (data[i].d == TOMBSTONE)
-            cout << "*T*";
+    // int printAmount;
+    // if (capacity < 500)
+    //     printAmount = capacity;
+    // else {
+    //     printAmount = 500;
+    // }
+    // for (int i = 0; i < printAmount; i++) {
+    //     if (data[i].d == TOMBSTONE)
+    //         cout << "*T*";
         
-        else 
-            cout << data[i].d;
-    }
+    //     else 
+    //         cout << data[i].d;
+    // }
 }

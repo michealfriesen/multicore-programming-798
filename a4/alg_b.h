@@ -45,11 +45,9 @@ bool AlgorithmB::insertIfAbsent(const int tid, const int & key) {
     uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < capacity; i++) {
         uint32_t index = (h + i) % capacity;
-        
         if(data[index].d == key) {
             return false; // No need to lock as there is no risk of overwriting
         }
-
         if(data[index].d == 0) { // Empty
             data[index].m.lock(); // Locking to ensure the key does not get overwritten before the change
             data[index].d = key;
