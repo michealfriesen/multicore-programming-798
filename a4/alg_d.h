@@ -16,18 +16,21 @@ private:
 
     struct table {
         // data types
-        char padding2[64]; 
+        char padding2[PADDING_BYTES]; 
         paddedDataNoLock * data;
         paddedDataNoLock * old; 
         uint32_t capacity;
         uint32_t oldCapacity;
-        counter * approxSize;
+        // Adding addition padding to avoid a thread from spinning and cache missing a bunch, invalidating other's.
+        char padding3[PADDING_BYTES];
         atomic<uint32_t> chunksClaimed;
+        char padding4[PADDING_BYTES];
         atomic<uint32_t> chunksDone;
-        char padding3[64];
+        char padding5[PADDING_BYTES];
         
         // constructor
-        table(paddedDataNoLock * _old, uint32_t _oldCapacity) : old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * 2), chunksClaimed(0), chunksDone(0) {
+        table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
+        old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * 2), chunksClaimed(0), chunksDone(0) {
             data = new paddedDataNoLock[capacity];
             for (int i = 0; i < capacity; i++)
                 data[i].d = EMPTY; // Initalize the data structure.
@@ -51,6 +54,8 @@ private:
     int initCapacity;
     // more fields (pad as appropriate)
     char padding1[PADDING_BYTES];
+    counter * approxSize;
+    // Padding below from currentTable
     table * currentTable;
     
 public:
@@ -72,6 +77,10 @@ public:
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity) {
     currentTable = new table(0, _capacity);
+    currentTable -> chunksClaimed = (float) _capacity / 4096;
+    currentTable -> chunksDone = (float) _capacity / 4096;
+    cout << currentTable -> chunksClaimed;
+    approxSize = new counter(_numThreads);
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -80,19 +89,75 @@ AlgorithmD::~AlgorithmD() {
 }
 
 bool AlgorithmD::expandAsNeeded(const int tid, table * t, int i) {
+    // This will implicitly check if expanding is true by trying to help.
+    cout << "Hey";
+    helpExpansion(tid, t);
+    // If it isn't, check the capacity, or how often we have probed.
+    // If we see the approx size is larger than 1/2 of the size, expand.
+    // If we see we are probing a large amount, get a more accurate check.
+    // TODO: Play with these numbers to check how they impact performance.
+    if ((approxSize -> get() > (t -> capacity)/2) || ((i > 10 ) && (approxSize -> getAccurate() > t -> capacity / 2 ))) {
+        cout << "Starting expansion!"; // TODO: Remove this when submitting / done testing.
+        startExpansion(tid, t);
+        return true;
+    }
     return false;
 }
 
 void AlgorithmD::helpExpansion(const int tid, table * t) {
+    int total_chunks = ceil((float) t -> oldCapacity / 4096);
 
+    // While there are chunks to claim,
+    // Claim some chunks
+    while (t -> chunksClaimed < t -> chunksDone) {
+        int myChunk = t -> chunksClaimed++;
+        // This checks if this work is actually within the bounds of the old data.
+        if (myChunk < total_chunks) {
+            migrate(tid, t, myChunk);
+            t -> chunksDone++;
+        }
+    }
+    
+    while (t -> chunksClaimed < total_chunks) {
+        // Do nothing and just wait for the last thread to finish.
+    }
 }
 
 void AlgorithmD::startExpansion(const int tid, table * t) {
+
+    // Make a new table
+    table * newTable = new table(t -> data, t -> capacity);
+
+    // Try to swap it if the old table is the same as it was
+    // TODO: Understand best way to do CAS on the table
+    // Make sure we compare the currentTable to the t value passed in startExpansion.
+    currentTable = newTable;
+
+    // Go help expand.
+    // TODO: Which table do we want to expand on?
+    helpExpansion(tid, newTable);
 
 }
 
 void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
 
+    cout << "hey";
+    // TODO: OPTIMIZATION STRATEGY
+    // Loop through the chunks to detect if we can use memory_order_relaxed 
+    // via the bookshelved space method. If we can, do an insert with all of those value 
+
+    int startingIndex = myChunk * 4096;
+    int totalInserts = t -> oldCapacity - startingIndex;
+    if (totalInserts >= 4096) {
+        totalInserts = 4096;
+    }
+
+    // TODO: assert that total inserts <= 4096
+    for (int i = 0; i < totalInserts; i++) {
+        
+        // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
+        insertIfAbsent(tid, t -> old[i + startingIndex].d, true);
+    }
 }
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
@@ -102,8 +167,10 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
     uint32_t h = getHash(key, t -> capacity); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < t->capacity; i++) {
 
-        // TODO: understand the importance of the disableExpansion
-        if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false); 
+        // Prevent the infinite loop for helping from occuring when migrating.
+        if (!disableExpansion) {
+            if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false); 
+        }
         uint32_t index = (h + i) % t->capacity;
         uint32_t value = t->data[index].d;
         
@@ -118,13 +185,22 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
         if (value == EMPTY) {
             // Successful insert!
             if (t->data[index].d.compare_exchange_strong(value, key)){
+                approxSize -> inc(tid); // incrementing as we added a value
                 return true;
             }
             else {
                 value = t->data[index].d;
                 // Expansion started
-                if (value & MARKED_MASK) return insertIfAbsent(tid, key, false);
+                if (value & MARKED_MASK) {
+                    if (disableExpansion) {
+                        // Prevents helping if we are migrating. This shouldn't really every happen as we should get our own chunks.
+                        cout << "Something when wrong when migrating. Another thread has our chunks!!";
+                        return insertIfAbsent(tid, key, true);
+                    }
+                    return insertIfAbsent(tid, key, false);
+                }   
                 
+
                 // Another thread inserted the key
                 else if (t->data[index].d == key) {
                     return false;
@@ -157,7 +233,6 @@ bool AlgorithmD::erase(const int tid, const int & key) {
         }
         else if(t->data[index].d == key) {
             // This is returning if the CAS was successful or not.
-            cout << value << endl;
             if (t->data[index].d.compare_exchange_strong(value, TOMBSTONE)) return true;
             else {
                 value = t->data[index].d;
