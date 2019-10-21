@@ -44,10 +44,10 @@ private:
         }
     };
     
-    bool expandAsNeeded(const int tid, table * t, int i);
-    void helpExpansion(const int tid, table * t);
-    void startExpansion(const int tid, table * t);
-    void migrate(const int tid, table * t, int myChunk);
+    bool expandAsNeeded(const int tid, atomic<table *> t, int i);
+    void helpExpansion(const int tid, atomic<table *> t);
+    void startExpansion(const int tid, atomic<table *> t);
+    void migrate(const int tid, atomic<table *> t, int myChunk);
     
     char padding0[PADDING_BYTES];
     int numThreads;
@@ -56,7 +56,7 @@ private:
     char padding1[PADDING_BYTES];
     counter * approxSize;
     // Padding below from currentTable
-    table * currentTable;
+    atomic<table *> currentTable;
     
 public:
     AlgorithmD(const int _numThreads, const int _capacity);
@@ -77,9 +77,8 @@ public:
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity) {
     currentTable = new table(0, _capacity);
-    currentTable -> chunksClaimed = (float) _capacity / 4096;
-    currentTable -> chunksDone = (float) _capacity / 4096;
-    cout << currentTable -> chunksClaimed;
+    currentTable.load()->chunksClaimed = (float) _capacity / 4096;
+    currentTable.load()->chunksDone = (float) _capacity / 4096;
     approxSize = new counter(_numThreads);
 }
 
@@ -88,58 +87,61 @@ AlgorithmD::~AlgorithmD() {
 
 }
 
-bool AlgorithmD::expandAsNeeded(const int tid, table * t, int i) {
+bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
+    return false;
     // This will implicitly check if expanding is true by trying to help.
     cout << "Hey";
-    helpExpansion(tid, t);
+    helpExpansion(tid, t.load());
     // If it isn't, check the capacity, or how often we have probed.
     // If we see the approx size is larger than 1/2 of the size, expand.
     // If we see we are probing a large amount, get a more accurate check.
     // TODO: Play with these numbers to check how they impact performance.
-    if ((approxSize -> get() > (t -> capacity)/2) || ((i > 10 ) && (approxSize -> getAccurate() > t -> capacity / 2 ))) {
+    if ((approxSize->get() > (t.load()->capacity)/2) || ((i > 10 ) && (approxSize->getAccurate() > t.load()->capacity / 2 ))) {
         cout << "Starting expansion!"; // TODO: Remove this when submitting / done testing.
-        startExpansion(tid, t);
+        startExpansion(tid, t.load());
         return true;
     }
     return false;
 }
 
-void AlgorithmD::helpExpansion(const int tid, table * t) {
-    int total_chunks = ceil((float) t -> oldCapacity / 4096);
+void AlgorithmD::helpExpansion(const int tid, atomic<table *> t) {
+    int total_chunks = ceil((float) t.load()->oldCapacity / 4096);
 
     // While there are chunks to claim,
     // Claim some chunks
-    while (t -> chunksClaimed < t -> chunksDone) {
-        int myChunk = t -> chunksClaimed++;
+    while (t.load()->chunksClaimed < t.load()->chunksDone) {
+        int myChunk = t.load()->chunksClaimed++;
         // This checks if this work is actually within the bounds of the old data.
         if (myChunk < total_chunks) {
-            migrate(tid, t, myChunk);
-            t -> chunksDone++;
+            migrate(tid, t.load(), myChunk);
+            t.load()->chunksDone++;
         }
     }
     
-    while (t -> chunksClaimed < total_chunks) {
+    while (t.load()->chunksClaimed < total_chunks) {
         // Do nothing and just wait for the last thread to finish.
     }
 }
 
-void AlgorithmD::startExpansion(const int tid, table * t) {
+void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
+
+    table * passedTable = t.load();
 
     // Make a new table
-    table * newTable = new table(t -> data, t -> capacity);
+    atomic<table *> newTable = new table(passedTable->data, passedTable->capacity);
 
     // Try to swap it if the old table is the same as it was
-    // TODO: Understand best way to do CAS on the table
     // Make sure we compare the currentTable to the t value passed in startExpansion.
-    currentTable = newTable;
+    if (!atomic_compare_exchange_strong(&currentTable, &passedTable, newTable)){
+        delete newTable;
+    }
 
     // Go help expand.
-    // TODO: Which table do we want to expand on?
-    helpExpansion(tid, newTable);
+    helpExpansion(tid, currentTable.load());
 
 }
 
-void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
+void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
     cout << "hey";
     // TODO: OPTIMIZATION STRATEGY
@@ -147,7 +149,7 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
     // via the bookshelved space method. If we can, do an insert with all of those value 
 
     int startingIndex = myChunk * 4096;
-    int totalInserts = t -> oldCapacity - startingIndex;
+    int totalInserts = t.load()->oldCapacity - startingIndex;
     if (totalInserts >= 4096) {
         totalInserts = 4096;
     }
@@ -156,15 +158,15 @@ void AlgorithmD::migrate(const int tid, table * t, int myChunk) {
     for (int i = 0; i < totalInserts; i++) {
         
         // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
-        insertIfAbsent(tid, t -> old[i + startingIndex].d, true);
+        insertIfAbsent(tid, t.load()->old[i + startingIndex].d, true);
     }
 }
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
 
-    table * t = currentTable;
-    uint32_t h = getHash(key, t -> capacity); // Generate hash that is indexed to our array.
+    table * t = currentTable.load();
+    uint32_t h = getHash(key, t->capacity); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < t->capacity; i++) {
 
         // Prevent the infinite loop for helping from occuring when migrating.
@@ -185,7 +187,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
         if (value == EMPTY) {
             // Successful insert!
             if (t->data[index].d.compare_exchange_strong(value, key)){
-                approxSize -> inc(tid); // incrementing as we added a value
+                approxSize->inc(tid); // incrementing as we added a value
                 return true;
             }
             else {
@@ -214,11 +216,11 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmD::erase(const int tid, const int & key) {
 
-    table * t = currentTable;
+    table * t = currentTable.load();
     // TODO: BEFORE ALL OF THIS, CHECK IF WE NEED TO EXPAND
 
     // Generate hash that is indexed to our array.
-    uint32_t h = getHash(key, t -> capacity);
+    uint32_t h = getHash(key, t->capacity);
     for (uint32_t i = 0; i < t->capacity; i++) {
         if (expandAsNeeded(tid, t, i)) return erase(tid, key); 
 
@@ -252,7 +254,7 @@ bool AlgorithmD::erase(const int tid, const int & key) {
 
 // semantics: return the sum of all KEYS in the set
 int64_t AlgorithmD::getSumOfKeys() {
-    table * t = currentTable;
+    table * t = currentTable.load();
     int64_t sum = 0;
 	for (int i = 0; i < t->capacity; i++) {
         if(t->data[i].d == TOMBSTONE){
@@ -271,21 +273,21 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmD::printDebuggingDetails() {
 
-    table * t = currentTable;
+    table * t = currentTable.load();
     int printAmount;
-    if (t -> capacity < 500)
-        printAmount = t -> capacity;
+    if (t->capacity < 500)
+        printAmount = t->capacity;
     else {
         printAmount = 500;
     }
     for (int i = 0; i < printAmount; i++) {
-        if (t -> data[i].d == TOMBSTONE)
+        if (t->data[i].d == TOMBSTONE)
             cout << "*T*";
         
-        else if (t -> data[i].d == EMPTY)
+        else if (t->data[i].d == EMPTY)
             cout << "*EMPTY*";
         
         else 
-            cout << t -> data[i].d;
+            cout << t->data[i].d;
     }
 }
