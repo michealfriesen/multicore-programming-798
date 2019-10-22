@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdio.h>
 #include <stdint.h>
+#include <assert.h>
 using namespace std;
 
 class AlgorithmD {
@@ -13,6 +14,8 @@ private:
         TOMBSTONE = (int) 0x7FFFFFFF,       // largest value that doesn't use bit MARKED_MASK
         EMPTY = (int) 0
     }; // with these definitions, the largest "real" key we allow in the table is 0x7FFFFFFE, and the smallest is 1 !!
+
+    static const int EXPANSION_FACTOR = 2;
 
     struct table {
         // data types
@@ -30,7 +33,7 @@ private:
         
         // constructor
         table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
-        old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * 2), chunksClaimed(0), chunksDone(0) {
+        old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
             data = new paddedDataNoLock[capacity];
             for (int i = 0; i < capacity; i++)
                 data[i].d = EMPTY; // Initalize the data structure.
@@ -77,8 +80,8 @@ public:
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity) {
     currentTable = new table(0, _capacity);
-    currentTable.load()->chunksClaimed = (float) _capacity / 4096;
-    currentTable.load()->chunksDone = (float) _capacity / 4096;
+    currentTable.load()->chunksClaimed = ceil((float) _capacity / 4096);
+    currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
     approxSize = new counter(_numThreads);
 }
 
@@ -87,38 +90,38 @@ AlgorithmD::~AlgorithmD() {
 
 }
 
+// This will implicitly check if expanding is true by trying to help.
 bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
-    return false;
-    // This will implicitly check if expanding is true by trying to help.
-    cout << "Hey";
     helpExpansion(tid, t.load());
     // If it isn't, check the capacity, or how often we have probed.
     // If we see the approx size is larger than 1/2 of the size, expand.
     // If we see we are probing a large amount, get a more accurate check.
     // TODO: Play with these numbers to check how they impact performance.
-    if ((approxSize->get() > (t.load()->capacity)/2) || ((i > 10 ) && (approxSize->getAccurate() > t.load()->capacity / 2 ))) {
-        cout << "Starting expansion!"; // TODO: Remove this when submitting / done testing.
+    if (((approxSize->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) || 
+    ((i > 10 ) && (approxSize->getAccurate() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )))) || 
+    (t.load()->capacity < 10)) {
         startExpansion(tid, t.load());
         return true;
     }
     return false;
 }
 
-void AlgorithmD::helpExpansion(const int tid, atomic<table *> t) {
-    int total_chunks = ceil((float) t.load()->oldCapacity / 4096);
+void AlgorithmD::helpExpansion(const int tid, atomic<table *> passedTable) {
+    table * t = passedTable.load();
+    uint32_t total_chunks = ceil((float) t->oldCapacity / 4096);
 
     // While there are chunks to claim,
     // Claim some chunks
-    while (t.load()->chunksClaimed < t.load()->chunksDone) {
-        int myChunk = t.load()->chunksClaimed++;
+    while (t->chunksClaimed < total_chunks) {
+        int myChunk = t->chunksClaimed++;
         // This checks if this work is actually within the bounds of the old data.
         if (myChunk < total_chunks) {
-            migrate(tid, t.load(), myChunk);
-            t.load()->chunksDone++;
+            migrate(tid, t, myChunk);
+            t->chunksDone++;
         }
     }
     
-    while (t.load()->chunksClaimed < total_chunks) {
+    while (t->chunksClaimed < total_chunks) {
         // Do nothing and just wait for the last thread to finish.
     }
 }
@@ -132,7 +135,7 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
 
     // Try to swap it if the old table is the same as it was
     // Make sure we compare the currentTable to the t value passed in startExpansion.
-    if (!atomic_compare_exchange_strong(&currentTable, &passedTable, newTable)){
+    if (!currentTable.compare_exchange_strong(passedTable, newTable)){
         delete newTable;
     }
 
@@ -143,7 +146,6 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
 
 void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
-    cout << "hey";
     // TODO: OPTIMIZATION STRATEGY
     // Loop through the chunks to detect if we can use memory_order_relaxed 
     // via the bookshelved space method. If we can, do an insert with all of those value 
@@ -154,11 +156,13 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
         totalInserts = 4096;
     }
 
-    // TODO: assert that total inserts <= 4096
+    void assert(totalInserts <= 4096);
     for (int i = 0; i < totalInserts; i++) {
         
         // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
-        insertIfAbsent(tid, t.load()->old[i + startingIndex].d, true);
+        if (!(t.load()->old[i + startingIndex].d == TOMBSTONE)) {
+            insertIfAbsent(tid, t.load()->old[i + startingIndex].d, true);
+        }
     }
 }
 
@@ -194,11 +198,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
                 value = t->data[index].d;
                 // Expansion started
                 if (value & MARKED_MASK) {
-                    if (disableExpansion) {
-                        // Prevents helping if we are migrating. This shouldn't really every happen as we should get our own chunks.
-                        cout << "Something when wrong when migrating. Another thread has our chunks!!";
-                        return insertIfAbsent(tid, key, true);
-                    }
+                    assert(!disableExpansion);
                     return insertIfAbsent(tid, key, false);
                 }   
                 
