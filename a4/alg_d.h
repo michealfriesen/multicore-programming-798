@@ -42,8 +42,10 @@ private:
         // destructor
         ~table() {
             // this check ensures expansion is not happening still.
-            if(chunksDone == capacity)
+            if(chunksDone == capacity){
+                cout << "NOPE";
                 delete data;
+            }
         }
     };
     
@@ -137,11 +139,9 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
     // Make sure we compare the currentTable to the t value passed in startExpansion.
     if (!currentTable.compare_exchange_strong(passedTable, newTable)){
         delete newTable;
-    }
-
+    } 
     // Go help expand.
     helpExpansion(tid, currentTable.load());
-
 }
 
 void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
@@ -157,10 +157,21 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
     }
 
     void assert(totalInserts <= 4096);
+
     for (int i = 0; i < totalInserts; i++) {
+
+        // TODO: Mark the thing first.
+        uint32_t currKey = t.load()->old[i + startingIndex].d;
+        while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
+            currKey = t.load()->old[i + startingIndex].d;
+        }
         
         // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
         if (!(t.load()->old[i + startingIndex].d == TOMBSTONE)) {
+
+            // Grab the old value
+
+            // Do an insert in the new table with the value, disablingExpansion
             insertIfAbsent(tid, t.load()->old[i + startingIndex].d, true);
         }
     }
@@ -168,7 +179,6 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
-
     table * t = currentTable.load();
     uint32_t h = getHash(key, t->capacity); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < t->capacity; i++) {
@@ -177,6 +187,13 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
         if (!disableExpansion) {
             if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false); 
         }
+        else {
+            uint32_t index = (h + i) % t->capacity;
+            uint32_t value = t->data[index].d;
+            if (value & MARKED_MASK) {
+                cout << "IT is marked.";
+            }
+        }
         uint32_t index = (h + i) % t->capacity;
         uint32_t value = t->data[index].d;
         
@@ -184,11 +201,11 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
         if (value & MARKED_MASK) return insertIfAbsent(tid, key, false);
 
         // Key already found
-        if (value == key) {
+        else if (value == key) {
             return false;
         }
 
-        if (value == EMPTY) {
+        else if (value == EMPTY) {
             // Successful insert!
             if (t->data[index].d.compare_exchange_strong(value, key)){
                 approxSize->inc(tid); // incrementing as we added a value
