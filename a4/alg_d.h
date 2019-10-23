@@ -34,8 +34,7 @@ private:
         // constructor
         table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
-            data = new paddedDataNoLock[capacity];
-            memset(data, 0, capacity * sizeof(paddedData));
+            data = new paddedDataNoLock[capacity]();
         }
     };
     
