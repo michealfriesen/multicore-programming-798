@@ -6,7 +6,7 @@ using namespace std;
 
 class AlgorithmB {
 public:
-    static constexpr int TOMBSTONE = -1;
+    static constexpr int TOMBSTONE = (int) 0x7FFFFFFF;
 
     char padding0[PADDING_BYTES];
     const int numThreads;
@@ -30,8 +30,7 @@ public:
  */
 AlgorithmB::AlgorithmB(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), capacity(_capacity) {
-    data = new paddedData[capacity];
-    memset(data, 0, capacity * sizeof(paddedData));
+    data = new paddedData[capacity]();
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -44,14 +43,23 @@ bool AlgorithmB::insertIfAbsent(const int tid, const int & key) {
     uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < capacity; i++) {
         uint32_t index = (h + i) % capacity;
-        if(data[index].d == key) {
+        if (data[index].d == key) {
             return false; // No need to lock as there is no risk of overwriting
         }
-        if(data[index].d == 0) { // Empty
-            data[index].m.lock(); // Locking to ensure the key does not get overwritten before the change
-            data[index].d = key;
+        if (data[index].d == 0) { // Empty
+            data[index].m.lock();
+            // Locking again as we need to verify it is still empty to avoid overwrites.
+            if (data[index].d == 0) {
+                data[index].d = key;
+                data[index].m.unlock();
+                return true;
+            }
+            // It is no longer empty.
             data[index].m.unlock();
-            return true;
+            // If it was the key, we can return false. If it was not, we keep looping.
+            if (data[index].d == key) {
+                return false; // No need to lock as there is no risk of overwriting
+            }
         }
     }
     return false; // Return false if there was no space, and the key wasn't found.
@@ -59,6 +67,7 @@ bool AlgorithmB::insertIfAbsent(const int tid, const int & key) {
 
 // semantics: try to erase key. return true if successful, and false otherwise
 bool AlgorithmB::erase(const int tid, const int & key) {
+    // return false;
     uint32_t h = murmur3(key); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < capacity; i++) {
         uint32_t index = (h + i) % capacity;

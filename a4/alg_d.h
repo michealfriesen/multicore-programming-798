@@ -110,6 +110,7 @@ bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
 }
 
 void AlgorithmD::helpExpansion(const int tid, table * t) {
+    
     // cout << t->chunksClaimed << "cc";
     uint32_t totalOldChunks = ceil((float) t->oldCapacity / 4096);
     // While there are chunks to claim,
