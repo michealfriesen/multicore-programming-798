@@ -15,7 +15,7 @@ private:
         EMPTY = (int) 0
     }; // with these definitions, the largest "real" key we allow in the table is 0x7FFFFFFE, and the smallest is 1 !!
 
-    static const int EXPANSION_FACTOR = 2;
+    static const int EXPANSION_FACTOR = 4;
 
     struct table {
         // data types
@@ -35,22 +35,12 @@ private:
         table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
             data = new paddedDataNoLock[capacity];
-            for (int i = 0; i < capacity; i++)
-                data[i].d = EMPTY; // Initalize the data structure.
-        }
-        
-        // destructor
-        ~table() {
-            // this check ensures expansion is not happening still.
-            if(chunksDone == capacity){
-                cout << "NOPE";
-                delete data;
-            }
+            memset(data, 0, capacity);
         }
     };
     
     bool expandAsNeeded(const int tid, atomic<table *> t, int i);
-    void helpExpansion(const int tid, atomic<table *> t);
+    void helpExpansion(const int tid, table * t);
     void startExpansion(const int tid, atomic<table *> t);
     void migrate(const int tid, atomic<table *> t, int myChunk);
     
@@ -82,6 +72,7 @@ public:
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity) {
     currentTable = new table(0, _capacity);
+    // Initialize the chunks claimed and chunks done to a state that resembles a normal state.
     currentTable.load()->chunksClaimed = ceil((float) _capacity / 4096);
     currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
     approxSize = new counter(_numThreads);
@@ -92,56 +83,63 @@ AlgorithmD::~AlgorithmD() {
 
 }
 
+// VETTED.
 // This will implicitly check if expanding is true by trying to help.
 bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
+    // return false;
+    
     helpExpansion(tid, t.load());
     // If it isn't, check the capacity, or how often we have probed.
     // If we see the approx size is larger than 1/2 of the size, expand.
     // If we see we are probing a large amount, get a more accurate check.
     // TODO: Play with these numbers to check how they impact performance.
-    if (((approxSize->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) || 
-    ((i > 10 ) && (approxSize->getAccurate() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )))) || 
-    (t.load()->capacity < 10)) {
+    if (approxSize->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) {
         startExpansion(tid, t.load());
         return true;
+    }
+    else if (t.load()->capacity < 10) {
+        startExpansion(tid, t.load());
+        return true;
+    }
+    else if (i > t.load()->capacity / 10000 ) {
+        if (approxSize->getAccurate() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )) {
+            startExpansion(tid, t.load());
+            return true;
+        }
     }
     return false;
 }
 
-void AlgorithmD::helpExpansion(const int tid, atomic<table *> passedTable) {
-    table * t = passedTable.load();
-    uint32_t total_chunks = ceil((float) t->oldCapacity / 4096);
-
+void AlgorithmD::helpExpansion(const int tid, table * t) {
+    // cout << t->chunksClaimed << "cc";
+    uint32_t totalOldChunks = ceil((float) t->oldCapacity / 4096);
     // While there are chunks to claim,
     // Claim some chunks
-    while (t->chunksClaimed < total_chunks) {
+    while (t->chunksClaimed < totalOldChunks) {
         int myChunk = t->chunksClaimed++;
         // This checks if this work is actually within the bounds of the old data.
-        if (myChunk < total_chunks) {
+        if (myChunk < totalOldChunks) {
             migrate(tid, t, myChunk);
             t->chunksDone++;
         }
     }
     
-    while (t->chunksClaimed < total_chunks) {
+    while (t->chunksClaimed < totalOldChunks) {
         // Do nothing and just wait for the last thread to finish.
     }
 }
 
 void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
+    table * passedTable = t.load(); 
 
-    table * passedTable = t.load();
+    table * newTable = new table(t.load()->data, t.load()->capacity);
 
     // Make a new table
-    atomic<table *> newTable = new table(passedTable->data, passedTable->capacity);
-
-    // Try to swap it if the old table is the same as it was
-    // Make sure we compare the currentTable to the t value passed in startExpansion.
-    if (!currentTable.compare_exchange_strong(passedTable, newTable)){
+    if (!(currentTable.compare_exchange_strong(passedTable, newTable))) {
         delete newTable;
-    } 
-    // Go help expand.
-    helpExpansion(tid, currentTable.load());
+    };
+
+    helpExpansion(tid, currentTable);
 }
 
 void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
@@ -152,27 +150,28 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
     int startingIndex = myChunk * 4096;
     int totalInserts = t.load()->oldCapacity - startingIndex;
-    if (totalInserts >= 4096) {
+    if (totalInserts > 4096) {
         totalInserts = 4096;
     }
 
-    void assert(totalInserts <= 4096);
+    assert(startingIndex < t.load()->oldCapacity);
+    assert(totalInserts <= 4096);
 
     for (int i = 0; i < totalInserts; i++) {
 
         // TODO: Mark the thing first.
         uint32_t currKey = t.load()->old[i + startingIndex].d;
         while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
+            cout << "marking has gone wrong!";
             currKey = t.load()->old[i + startingIndex].d;
         }
-        
+        int v = t.load()->old[i + startingIndex].d & ~MARKED_MASK;
         // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
-        if (!(t.load()->old[i + startingIndex].d == TOMBSTONE)) {
+        if ((v != TOMBSTONE) && (v != EMPTY)) {
 
             // Grab the old value
-
             // Do an insert in the new table with the value, disablingExpansion
-            insertIfAbsent(tid, t.load()->old[i + startingIndex].d, true);
+            insertIfAbsent(tid, v, true);
         }
     }
 }
@@ -181,50 +180,67 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpansion = false) {
     table * t = currentTable.load();
     uint32_t h = getHash(key, t->capacity); // Generate hash that is indexed to our array.
-    for (uint32_t i = 0; i < t->capacity; i++) {
+    for (uint32_t i = 0; i < t->capacity; ++i) {
 
         // Prevent the infinite loop for helping from occuring when migrating.
-        if (!disableExpansion) {
-            if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false); 
-        }
-        else {
+        if (disableExpansion) {
             uint32_t index = (h + i) % t->capacity;
             uint32_t value = t->data[index].d;
-            if (value & MARKED_MASK) {
-                cout << "IT is marked.";
+            
+            assert(key != TOMBSTONE);
+            assert(key > 0);
+
+            // This means something went wrong during migration...
+            if (value == key) {
             }
-        }
-        uint32_t index = (h + i) % t->capacity;
-        uint32_t value = t->data[index].d;
-        
-        // Expansion happening
-        if (value & MARKED_MASK) return insertIfAbsent(tid, key, false);
 
-        // Key already found
-        else if (value == key) {
-            return false;
-        }
-
-        else if (value == EMPTY) {
-            // Successful insert!
-            if (t->data[index].d.compare_exchange_strong(value, key)){
-                approxSize->inc(tid); // incrementing as we added a value
-                return true;
-            }
-            else {
-                value = t->data[index].d;
-                // Expansion started
-                if (value & MARKED_MASK) {
-                    assert(!disableExpansion);
-                    return insertIfAbsent(tid, key, false);
-                }   
-                
-
-                // Another thread inserted the key
-                else if (t->data[index].d == key) {
-                    return false;
+            else if (value == EMPTY) {
+                if (t->data[index].d.compare_exchange_strong(value, key)){
+                    // not incrementing as we have not really added a value
+                    return true;
                 }
-            }            
+                else {
+                }
+            }
+        }
+        else {
+            if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false);
+
+            uint32_t index = (h + i) % t->capacity;
+            uint32_t value = t->data[index].d;
+            
+            // Expansion happening
+            if (value & MARKED_MASK) {
+                // cout << "Marked so we are not doing this.";
+                return insertIfAbsent(tid, key, false);
+            }
+
+            // Key already found
+            else if (value == key) {
+                return false;
+            }
+
+            else if (value == EMPTY) {
+                // Successful insert!
+                if (t->data[index].d.compare_exchange_strong(value, key)){
+                    approxSize->inc(tid); // incrementing as we added a value
+                    return true;
+                }
+                else {
+                    value = t->data[index].d;
+
+                    // Expansion started, go help.
+                    if (value & MARKED_MASK) {
+                        assert(!disableExpansion);
+                        return insertIfAbsent(tid, value |= MARKED_MASK, false);
+                    }   
+        
+                    // Another thread inserted the key
+                    else if (t->data[index].d == key) {
+                        return false;
+                    }
+                }            
+            }
         }
     }
     return false; // Return false if there was no space, and the key wasn't found.
@@ -284,7 +300,7 @@ int64_t AlgorithmD::getSumOfKeys() {
 }
 
 uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
-    return floor(((double) murmur3(key) / (double) UINT32_MAX) * capacity); 
+    return floor(((double ) murmur3(key) / (double) UINT32_MAX) * capacity); 
 }
 
 // print any debugging details you want at the end of a trial in this function
