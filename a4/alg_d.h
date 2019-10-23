@@ -306,21 +306,21 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmD::printDebuggingDetails() {
 
-    table * t = currentTable.load();
-    int printAmount;
-    if (t->capacity < 500)
-        printAmount = t->capacity;
-    else {
-        printAmount = 500;
-    }
-    for (int i = 0; i < printAmount; i++) {
-        if (t->data[i].d == TOMBSTONE)
-            cout << "*T*";
+    // table * t = currentTable.load();
+    // int printAmount;
+    // if (t->capacity < 500)
+    //     printAmount = t->capacity;
+    // else {
+    //     printAmount = 500;
+    // }
+    // for (int i = 0; i < printAmount; i++) {
+    //     if (t->data[i].d == TOMBSTONE)
+    //         cout << "*T*";
         
-        else if (t->data[i].d == EMPTY)
-            cout << "*EMPTY*";
+    //     else if (t->data[i].d == EMPTY)
+    //         cout << "*EMPTY*";
         
-        else 
-            cout << t->data[i].d;
-    }
+    //     else 
+    //         cout << t->data[i].d;
+    // }
 }
