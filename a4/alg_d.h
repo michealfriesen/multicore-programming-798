@@ -36,6 +36,10 @@ private:
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
             data = new paddedDataNoLock[capacity]();
         }
+
+        ~table() {
+            delete data;
+        }
     };
     
     bool expandAsNeeded(const int tid, atomic<table *> t, int i);
@@ -79,7 +83,7 @@ AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 
 // destructor: clean up any allocated memory, etc.
 AlgorithmD::~AlgorithmD() {
-
+    delete currentTable;
 }
 
 // VETTED.
@@ -173,6 +177,11 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
             // Do an insert in the new table with the value, disablingExpansion
             insertIfAbsent(tid, v, true);
         }
+    }
+
+    // Cleanup the old data when we have finished migrating.
+    if (myChunk == ceil((float) t.load()->oldCapacity / 4096)){
+        delete t.load()->old;
     }
 }
 

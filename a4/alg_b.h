@@ -73,10 +73,19 @@ bool AlgorithmB::erase(const int tid, const int & key) {
         uint32_t index = (h + i) % capacity;
         
         if(data[index].d == key) {
-            data[index].m.lock(); // Locking to ensure no overwrites occur.
-            data[index].d = TOMBSTONE;
+            // Locking to ensure no overwrites occur.
+            data[index].m.lock(); 
+            if(data[index].d == key) {
+                data[index].d = TOMBSTONE;
+                data[index].m.unlock();
+                return true;
+            }
+            // Someone else deleted.
+            if(data[index].d == 0) {
+                data[index].m.unlock();
+                return false;
+            }
             data[index].m.unlock();
-            return true;
         }
 
         if(data[index].d == 0) {
