@@ -1,5 +1,5 @@
 GPP = g++
-FLAGS = -g
+FLAGS = -O3 -g
 FLAGS += -std=c++17
 FLAGS += -fopenmp
 LDFLAGS = -lpthread
