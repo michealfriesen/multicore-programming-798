@@ -31,14 +31,13 @@ public:
 AlgorithmB::AlgorithmB(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), capacity(_capacity) {
     data = new paddedData[capacity];
-    for (int i = 0; i < _capacity; i++)
-        data[i].d = 0; // Initalize the data structure.
+    memset(data, 0, capacity * sizeof(paddedData));
 }
 
 // destructor: clean up any allocated memory, etc.
 AlgorithmB::~AlgorithmB() {
     delete data;
-}
+} 
 
 // semantics: try to insert key. return true if successful (if key doesn't already exist), and false otherwise
 bool AlgorithmB::insertIfAbsent(const int tid, const int & key) {
