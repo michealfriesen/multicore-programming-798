@@ -19,6 +19,7 @@ private:
     static const int EXPANSION_SIZE = 2;
     static const int PROBING_AMOUNT = 100;
 
+
     struct table {
         // data types
         char padding2[PADDING_BYTES];
@@ -59,7 +60,6 @@ private:
     int initCapacity;
     // more fields (pad as appropriate)
     char padding2[PADDING_BYTES];
-    counter * probingCount;
     // Padding below from currentTable
     atomic<table *> currentTable;
     
@@ -86,7 +86,6 @@ AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
     // Initialize the chunks claimed and chunks done to a state that resembles a normal state.
     currentTable.load()->chunksClaimed = ceil((float) _capacity / 4096);
     currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
-    probingCount = new counter(_numThreads);
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -182,7 +181,6 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
     table * t = currentTable.load();
     uint32_t h = getHash(key, t->capacity); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < t->capacity; ++i) {
-        probingCount->inc(tid);
 
         // Prevent the infinite loop for helping from occuring when migrating.
         if (disableExpansion) {
@@ -255,7 +253,6 @@ bool AlgorithmD::erase(const int tid, const int & key) {
     // Generate hash that is indexed to our array.
     uint32_t h = getHash(key, t->capacity);
     for (uint32_t i = 0; i < t->capacity; i++) {
-        probingCount->inc(tid);
         if (expandAsNeeded(tid, t, i)) return erase(tid, key); 
 
         uint32_t index = (h + i) % t->capacity;
@@ -311,7 +308,6 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 void AlgorithmD::printDebuggingDetails() {
 
     // cout << "Final Capacity is: " << currentTable.load()->capacity << endl;
-    cout << "Final Probing amount is: " << probingCount->getAccurate() << endl;
     // table * t = currentTable.load();
     // int printAmount;
     // if (t->capacity < 500)
