@@ -39,7 +39,7 @@ private:
         // constructor
         table(atomic<uint32_t> * _old, uint32_t _oldCapacity, int _numThreads) : 
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_SIZE), chunksClaimed(0), chunksDone(0) {
-            data = new atomic<uint32_t>[capacity];
+            data = new atomic<uint32_t>[capacity]();
             tombstoneCount = new counter(_numThreads);
             approxSize = new counter(_numThreads);
         }
