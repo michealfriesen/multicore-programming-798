@@ -54,6 +54,7 @@ private:
     char padding1[PADDING_BYTES];
     counter * approxSize;
     counter * approxDeletes;
+    counter * probingTotal;
     // Padding below from currentTable
     atomic<table *> currentTable;
     
@@ -81,6 +82,7 @@ AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
     currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
     approxSize = new counter(_numThreads);
     approxDeletes = new counter(_numThreads);
+    probingTotal = new counter(_numThreads); // Used for testing what an appropriate probing amount should be.
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -88,7 +90,6 @@ AlgorithmD::~AlgorithmD() {
     delete currentTable;
 }
 
-// VETTED.
 // This will implicitly check if expanding is true by trying to help.
 bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
     // return false;
@@ -122,7 +123,6 @@ bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
 
 void AlgorithmD::helpExpansion(const int tid, table * t) {
     
-    // cout << t->chunksClaimed << "cc";
     uint32_t totalOldChunks = ceil((float) t->oldCapacity / 4096);
     // While there are chunks to claim,
     // Claim some chunks
@@ -144,8 +144,6 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
     table * passedTable = t.load(); 
 
     table * newTable = new table(t.load()->data, t.load()->capacity);
-    // cout << passedTable << " Passed " << tid << endl;
-    // cout << t << " T" << tid << endl; 
 
     // Make a new table
     if (!(currentTable.compare_exchange_strong(passedTable, newTable))) {
@@ -157,10 +155,6 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
 
 void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
-    // TODO: OPTIMIZATION STRATEGY
-    // Loop through the chunks to detect if we can use memory_order_relaxed 
-    // via the bookshelved space method. If we can, do an insert with all of those value 
-
     int startingIndex = myChunk * 4096;
     int totalInserts = t.load()->oldCapacity - startingIndex;
     if (totalInserts > 4096) {
@@ -171,6 +165,7 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
     assert(totalInserts <= 4096);
 
     for (int i = 0; i < totalInserts; i++) {
+        probingTotal->inc(tid);
 
         uint32_t currKey = t.load()->old[i + startingIndex].d;
         while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
@@ -223,7 +218,6 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
             
             // Expansion happening
             if (value & MARKED_MASK) {
-                // cout << "Marked so we are not doing this.";
                 return insertIfAbsent(tid, key, false);
             }
 
@@ -322,6 +316,7 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 void AlgorithmD::printDebuggingDetails() {
 
     cout << "Final Capacity is: " << currentTable.load()->capacity << endl;
+    cout << "Final Probing amount is: " << probingTotal->getAccurate() << endl;
     // table * t = currentTable.load();
     // int printAmount;
     // if (t->capacity < 500)
