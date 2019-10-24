@@ -15,7 +15,7 @@ private:
         EMPTY = (int) 0
     }; // with these definitions, the largest "real" key we allow in the table is 0x7FFFFFFE, and the smallest is 1 !!
 
-    static const int EXPANSION_FACTOR = 4;
+    static const int EXPANSION_FACTOR = 2;
 
     struct table {
         // data types
@@ -34,11 +34,11 @@ private:
         // constructor
         table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
-            data = new paddedDataNoLock[capacity];
+            data = new paddedDataNoLock[capacity]();
         }
 
         ~table() {
-            delete data;
+            delete[] data;
         }
     };
     
@@ -53,6 +53,7 @@ private:
     // more fields (pad as appropriate)
     char padding1[PADDING_BYTES];
     counter * approxSize;
+    counter * approxDeletes;
     // Padding below from currentTable
     atomic<table *> currentTable;
     
@@ -79,6 +80,7 @@ AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
     currentTable.load()->chunksClaimed = ceil((float) _capacity / 4096);
     currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
     approxSize = new counter(_numThreads);
+    approxDeletes = new counter(_numThreads);
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -96,7 +98,7 @@ bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
     // If we see the approx size is larger than 1/2 of the size, expand.
     // If we see we are probing a large amount, get a more accurate check.
     // TODO: Play with these numbers to check how they impact performance.
-    if (approxSize->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) {
+    if (approxSize->get() - approxDeletes->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) {
         startExpansion(tid, t.load());
         return true;
     }
@@ -104,8 +106,13 @@ bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
         startExpansion(tid, t.load());
         return true;
     }
-    else if (i > t.load()->capacity / 10000 ) {
-        if (approxSize->getAccurate() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )) {
+    int probingAmount = 10;
+    if ((t.load()->capacity / 10000) > 10) {
+        probingAmount = t.load()->capacity / 10000; 
+    }
+    
+    else if (i > probingAmount) {
+        if (approxSize->getAccurate() - approxDeletes->get() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )) {
             startExpansion(tid, t.load());
             return true;
         }
@@ -137,6 +144,8 @@ void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
     table * passedTable = t.load(); 
 
     table * newTable = new table(t.load()->data, t.load()->capacity);
+    // cout << passedTable << " Passed " << tid << endl;
+    // cout << t << " T" << tid << endl; 
 
     // Make a new table
     if (!(currentTable.compare_exchange_strong(passedTable, newTable))) {
@@ -163,7 +172,6 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
     for (int i = 0; i < totalInserts; i++) {
 
-        // TODO: Mark the thing first.
         uint32_t currKey = t.load()->old[i + startingIndex].d;
         while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
             cout << "marking has gone wrong!";
@@ -177,11 +185,6 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
             // Do an insert in the new table with the value, disablingExpansion
             insertIfAbsent(tid, v, true);
         }
-    }
-
-    // Cleanup the old data when we have finished migrating.
-    if (myChunk == ceil((float) t.load()->oldCapacity / 4096)){
-        delete t.load()->old;
     }
 }
 
@@ -277,7 +280,10 @@ bool AlgorithmD::erase(const int tid, const int & key) {
         }
         else if(t->data[index].d == key) {
             // This is returning if the CAS was successful or not.
-            if (t->data[index].d.compare_exchange_strong(value, TOMBSTONE)) return true;
+            if (t->data[index].d.compare_exchange_strong(value, TOMBSTONE))  {
+                approxDeletes->inc(tid);
+                return true;
+            }
             else {
                 value = t->data[index].d;
                 
@@ -315,6 +321,7 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmD::printDebuggingDetails() {
 
+    cout << "Final Capacity is: " << currentTable.load()->capacity << endl;
     // table * t = currentTable.load();
     // int printAmount;
     // if (t->capacity < 500)
