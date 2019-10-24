@@ -15,13 +15,21 @@ private:
         EMPTY = (int) 0
     }; // with these definitions, the largest "real" key we allow in the table is 0x7FFFFFFE, and the smallest is 1 !!
 
-    static const int EXPANSION_FACTOR = 2;
+    char padding6[PADDING_BYTES];
+    static const int EXPANSION_FACTOR = 4;
+    char padding7[PADDING_BYTES];
+    static const int EXPANSION_SIZE = 2;
+    char padding8[PADDING_BYTES];
+    static const int PROBING_AMOUNT = 100;
+    char padding9[PADDING_BYTES];
 
     struct table {
         // data types
         char padding2[PADDING_BYTES]; 
         paddedDataNoLock * data;
-        paddedDataNoLock * old; 
+        paddedDataNoLock * old;
+        counter * tombstoneCount;
+        counter * approxSize;
         uint32_t capacity;
         uint32_t oldCapacity;
         // Adding addition padding to avoid a thread from spinning and cache missing a bunch, invalidating other's.
@@ -32,13 +40,17 @@ private:
         char padding5[PADDING_BYTES];
         
         // constructor
-        table(paddedDataNoLock * _old, uint32_t _oldCapacity) : 
-        old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_FACTOR), chunksClaimed(0), chunksDone(0) {
-            data = new paddedDataNoLock[capacity]();
+        table(paddedDataNoLock * _old, uint32_t _oldCapacity, int _numThreads) : 
+        old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_SIZE), chunksClaimed(0), chunksDone(0) {
+            data = new paddedDataNoLock[capacity];
+            tombstoneCount = new counter(_numThreads);
+            approxSize = new counter(_numThreads);
         }
 
         ~table() {
             delete[] data;
+            delete tombstoneCount;
+            delete approxSize;
         }
     };
     
@@ -48,13 +60,10 @@ private:
     void migrate(const int tid, atomic<table *> t, int myChunk);
     
     char padding0[PADDING_BYTES];
-    int numThreads;
     int initCapacity;
     // more fields (pad as appropriate)
-    char padding1[PADDING_BYTES];
-    counter * approxSize;
-    counter * approxDeletes;
-    counter * probingTotal;
+    char padding2[PADDING_BYTES];
+    counter * probingCount;
     // Padding below from currentTable
     atomic<table *> currentTable;
     
@@ -65,7 +74,8 @@ public:
     bool erase(const int tid, const int & key);
     long getSumOfKeys();
     uint32_t getHash(const int& key, uint32_t capacity);
-    void printDebuggingDetails(); 
+    void printDebuggingDetails();
+    int numThreads; 
 };
 
 /**
@@ -76,13 +86,11 @@ public:
  */
 AlgorithmD::AlgorithmD(const int _numThreads, const int _capacity)
 : numThreads(_numThreads), initCapacity(_capacity) {
-    currentTable = new table(0, _capacity);
+    currentTable = new table(0, _capacity, _numThreads);
     // Initialize the chunks claimed and chunks done to a state that resembles a normal state.
     currentTable.load()->chunksClaimed = ceil((float) _capacity / 4096);
     currentTable.load()->chunksDone = ceil((float) _capacity / 4096);
-    approxSize = new counter(_numThreads);
-    approxDeletes = new counter(_numThreads);
-    probingTotal = new counter(_numThreads); // Used for testing what an appropriate probing amount should be.
+    probingCount = new counter(_numThreads);
 }
 
 // destructor: clean up any allocated memory, etc.
@@ -99,21 +107,13 @@ bool AlgorithmD::expandAsNeeded(const int tid, atomic<table *> t, int i) {
     // If we see the approx size is larger than 1/2 of the size, expand.
     // If we see we are probing a large amount, get a more accurate check.
     // TODO: Play with these numbers to check how they impact performance.
-    if (approxSize->get() - approxDeletes->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) {
+
+    if (t.load()->approxSize->get() + t.load()->tombstoneCount->get() > (ceil((float)t.load()->capacity)/EXPANSION_FACTOR)) {
         startExpansion(tid, t.load());
         return true;
     }
-    else if (t.load()->capacity < 10) {
-        startExpansion(tid, t.load());
-        return true;
-    }
-    int probingAmount = 10;
-    if ((t.load()->capacity / 10000) > 10) {
-        probingAmount = t.load()->capacity / 10000; 
-    }
-    
-    else if (i > probingAmount) {
-        if (approxSize->getAccurate() - approxDeletes->get() > ceil((float)t.load()->capacity / EXPANSION_FACTOR )) {
+    else if (i > PROBING_AMOUNT) {
+        if (t.load()->approxSize->getAccurate() + t.load()->tombstoneCount->getAccurate() > ceil((float)t.load()->capacity/EXPANSION_FACTOR)) {
             startExpansion(tid, t.load());
             return true;
         }
@@ -143,7 +143,7 @@ void AlgorithmD::helpExpansion(const int tid, table * t) {
 void AlgorithmD::startExpansion(const int tid, atomic<table *> t) {
     table * passedTable = t.load(); 
 
-    table * newTable = new table(t.load()->data, t.load()->capacity);
+    table * newTable = new table(t.load()->data, t.load()->capacity, numThreads);
 
     // Make a new table
     if (!(currentTable.compare_exchange_strong(passedTable, newTable))) {
@@ -165,11 +165,9 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
     assert(totalInserts <= 4096);
 
     for (int i = 0; i < totalInserts; i++) {
-        probingTotal->inc(tid);
 
         uint32_t currKey = t.load()->old[i + startingIndex].d;
         while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
-            cout << "marking has gone wrong!";
             currKey = t.load()->old[i + startingIndex].d;
         }
         int v = t.load()->old[i + startingIndex].d & ~MARKED_MASK;
@@ -188,6 +186,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
     table * t = currentTable.load();
     uint32_t h = getHash(key, t->capacity); // Generate hash that is indexed to our array.
     for (uint32_t i = 0; i < t->capacity; ++i) {
+        probingCount->inc(tid);
 
         // Prevent the infinite loop for helping from occuring when migrating.
         if (disableExpansion) {
@@ -203,7 +202,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 
             else if (value == EMPTY) {
                 if (t->data[index].d.compare_exchange_strong(value, key)){
-                    // not incrementing as we have not really added a value
+                    t->approxSize->inc(tid);
                     return true;
                 }
                 else {
@@ -229,7 +228,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
             else if (value == EMPTY) {
                 // Successful insert!
                 if (t->data[index].d.compare_exchange_strong(value, key)){
-                    approxSize->inc(tid); // incrementing as we added a value
+                    t->approxSize->inc(tid); // incrementing as we added a value
                     return true;
                 }
                 else {
@@ -256,11 +255,11 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 bool AlgorithmD::erase(const int tid, const int & key) {
 
     table * t = currentTable.load();
-    // TODO: BEFORE ALL OF THIS, CHECK IF WE NEED TO EXPAND
 
     // Generate hash that is indexed to our array.
     uint32_t h = getHash(key, t->capacity);
     for (uint32_t i = 0; i < t->capacity; i++) {
+        probingCount->inc(tid);
         if (expandAsNeeded(tid, t, i)) return erase(tid, key); 
 
         uint32_t index = (h + i) % t->capacity;
@@ -275,7 +274,7 @@ bool AlgorithmD::erase(const int tid, const int & key) {
         else if(t->data[index].d == key) {
             // This is returning if the CAS was successful or not.
             if (t->data[index].d.compare_exchange_strong(value, TOMBSTONE))  {
-                approxDeletes->inc(tid);
+                t->tombstoneCount->inc(tid);
                 return true;
             }
             else {
@@ -315,8 +314,8 @@ uint32_t AlgorithmD::getHash(const int& key, uint32_t capacity) {
 // print any debugging details you want at the end of a trial in this function
 void AlgorithmD::printDebuggingDetails() {
 
-    cout << "Final Capacity is: " << currentTable.load()->capacity << endl;
-    cout << "Final Probing amount is: " << probingTotal->getAccurate() << endl;
+    // cout << "Final Capacity is: " << currentTable.load()->capacity << endl;
+    cout << "Final Probing amount is: " << probingCount->getAccurate() << endl;
     // table * t = currentTable.load();
     // int printAmount;
     // if (t->capacity < 500)
