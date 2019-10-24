@@ -15,19 +15,15 @@ private:
         EMPTY = (int) 0
     }; // with these definitions, the largest "real" key we allow in the table is 0x7FFFFFFE, and the smallest is 1 !!
 
-    char padding6[PADDING_BYTES];
-    static const int EXPANSION_FACTOR = 4;
-    char padding7[PADDING_BYTES];
+    static const int EXPANSION_FACTOR = 2;
     static const int EXPANSION_SIZE = 2;
-    char padding8[PADDING_BYTES];
     static const int PROBING_AMOUNT = 100;
-    char padding9[PADDING_BYTES];
 
     struct table {
         // data types
-        char padding2[PADDING_BYTES]; 
-        paddedDataNoLock * data;
-        paddedDataNoLock * old;
+        char padding2[PADDING_BYTES];
+        atomic<uint32_t> * data;
+        atomic<uint32_t> * old;
         counter * tombstoneCount;
         counter * approxSize;
         uint32_t capacity;
@@ -40,9 +36,9 @@ private:
         char padding5[PADDING_BYTES];
         
         // constructor
-        table(paddedDataNoLock * _old, uint32_t _oldCapacity, int _numThreads) : 
+        table(atomic<uint32_t> * _old, uint32_t _oldCapacity, int _numThreads) : 
         old(_old), oldCapacity(_oldCapacity), capacity(_oldCapacity * EXPANSION_SIZE), chunksClaimed(0), chunksDone(0) {
-            data = new paddedDataNoLock[capacity];
+            data = new atomic<uint32_t>[capacity];
             tombstoneCount = new counter(_numThreads);
             approxSize = new counter(_numThreads);
         }
@@ -166,11 +162,11 @@ void AlgorithmD::migrate(const int tid, atomic<table *> t, int myChunk) {
 
     for (int i = 0; i < totalInserts; i++) {
 
-        uint32_t currKey = t.load()->old[i + startingIndex].d;
-        while(!(t.load()->old[i + startingIndex].d.compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
-            currKey = t.load()->old[i + startingIndex].d;
+        uint32_t currKey = t.load()->old[i + startingIndex];
+        while(!(t.load()->old[i + startingIndex].compare_exchange_strong(currKey, currKey | MARKED_MASK))) {
+            currKey = t.load()->old[i + startingIndex];
         }
-        int v = t.load()->old[i + startingIndex].d & ~MARKED_MASK;
+        int v = t.load()->old[i + startingIndex] & ~MARKED_MASK;
         // Do an insertIfAbsent with disableExpansion true to avoid recursion loop
         if ((v != TOMBSTONE) && (v != EMPTY)) {
 
@@ -191,7 +187,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
         // Prevent the infinite loop for helping from occuring when migrating.
         if (disableExpansion) {
             uint32_t index = (h + i) % t->capacity;
-            uint32_t value = t->data[index].d;
+            uint32_t value = t->data[index];
             
             assert(key != TOMBSTONE);
             assert(key > 0);
@@ -201,7 +197,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
             }
 
             else if (value == EMPTY) {
-                if (t->data[index].d.compare_exchange_strong(value, key)){
+                if (t->data[index].compare_exchange_strong(value, key)){
                     t->approxSize->inc(tid);
                     return true;
                 }
@@ -213,7 +209,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
             if (expandAsNeeded(tid, t, i)) return insertIfAbsent(tid, key, false);
 
             uint32_t index = (h + i) % t->capacity;
-            uint32_t value = t->data[index].d;
+            uint32_t value = t->data[index];
             
             // Expansion happening
             if (value & MARKED_MASK) {
@@ -227,12 +223,12 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
 
             else if (value == EMPTY) {
                 // Successful insert!
-                if (t->data[index].d.compare_exchange_strong(value, key)){
+                if (t->data[index].compare_exchange_strong(value, key)){
                     t->approxSize->inc(tid); // incrementing as we added a value
                     return true;
                 }
                 else {
-                    value = t->data[index].d;
+                    value = t->data[index];
 
                     // Expansion started, go help.
                     if (value & MARKED_MASK) {
@@ -241,7 +237,7 @@ bool AlgorithmD::insertIfAbsent(const int tid, const int & key, bool disableExpa
                     }   
         
                     // Another thread inserted the key
-                    else if (t->data[index].d == key) {
+                    else if (t->data[index] == key) {
                         return false;
                     }
                 }            
@@ -263,28 +259,28 @@ bool AlgorithmD::erase(const int tid, const int & key) {
         if (expandAsNeeded(tid, t, i)) return erase(tid, key); 
 
         uint32_t index = (h + i) % t->capacity;
-        uint32_t value = t->data[index].d;
+        uint32_t value = t->data[index];
         
         // Expansion happening
         if (value & MARKED_MASK) return erase(tid, key);
         
-        if(t->data[index].d == 0) {
+        if(t->data[index] == 0) {
             return false;
         }
-        else if(t->data[index].d == key) {
+        else if(t->data[index] == key) {
             // This is returning if the CAS was successful or not.
-            if (t->data[index].d.compare_exchange_strong(value, TOMBSTONE))  {
+            if (t->data[index].compare_exchange_strong(value, TOMBSTONE))  {
                 t->tombstoneCount->inc(tid);
                 return true;
             }
             else {
-                value = t->data[index].d;
+                value = t->data[index];
                 
                 // Expansion started
                 if (value & MARKED_MASK) return erase(tid, key);
 
                 // Someone else deleted
-                else if (t->data[index].d == TOMBSTONE) {
+                else if (t->data[index] == TOMBSTONE) {
                     return false;
                 }
             }
@@ -298,10 +294,10 @@ int64_t AlgorithmD::getSumOfKeys() {
     table * t = currentTable.load();
     int64_t sum = 0;
 	for (int i = 0; i < t->capacity; i++) {
-        if(t->data[i].d == TOMBSTONE){
+        if(t->data[i] == TOMBSTONE){
         }
         else {
-		    sum += t->data[i].d;
+		    sum += t->data[i];
         }
     }
 	return sum;
@@ -324,13 +320,13 @@ void AlgorithmD::printDebuggingDetails() {
     //     printAmount = 500;
     // }
     // for (int i = 0; i < printAmount; i++) {
-    //     if (t->data[i].d == TOMBSTONE)
+    //     if (t->data[i] == TOMBSTONE)
     //         cout << "*T*";
         
-    //     else if (t->data[i].d == EMPTY)
+    //     else if (t->data[i] == EMPTY)
     //         cout << "*EMPTY*";
         
     //     else 
-    //         cout << t->data[i].d;
+    //         cout << t->data[i];
     // }
 }
