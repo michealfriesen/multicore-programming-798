@@ -16,7 +16,7 @@ private:
     
     struct Node {
         KCASLockFree<1> initKcas;
-        volatile char padding0[PADDING_BYTES];
+        volatile char padding0[PADDING_BYTES - (sizeof(casword_t) * 4)];
         casword_t prev; 
         casword_t next;
         casword_t data;
@@ -84,8 +84,16 @@ DoublyLinkedListReclaim::DoublyLinkedListReclaim(const int _numThreads, const in
 }
 
 DoublyLinkedListReclaim::~DoublyLinkedListReclaim() {
-    recmgr->deallocate(0, head);
-    recmgr->deallocate(0, tail);   
+    Node * currentNode = head;
+    Node * nextNode = (Node *) kcas.readPtr(0, &currentNode->next);
+    while(nextNode != NULL) {
+        currentNode = nextNode;
+        nextNode = (Node *) kcas.readPtr(0, &currentNode->next);
+        Node * deletingNode = (Node *) kcas.readPtr(0, &currentNode->prev);
+        recmgr->deallocate(0, deletingNode);
+    }
+    recmgr->deallocate(0, tail);
+    delete recmgr;
 }
 
 bool DoublyLinkedListReclaim::contains(const int tid, const int & key) {
@@ -173,6 +181,7 @@ bool DoublyLinkedListReclaim::erase(const int tid, const int & key) {
             descPtr->addPtrAddr(&nextNode->prev, (casword_t) currentNode, (casword_t) prevNode);
 
             if (kcas.execute(tid, descPtr)) {
+                // Successfully deleted.
                 recmgr->retire(tid, currentNode);
                 return true;
             }

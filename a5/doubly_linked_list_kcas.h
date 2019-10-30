@@ -5,17 +5,15 @@
 
 class DoublyLinkedList {
 private:
-    volatile char padding0[PADDING_BYTES];
     const int numThreads;
     const int minKey;
     const int maxKey;
-    volatile char padding1[PADDING_BYTES];
 
     KCASLockFree<5> kcas;
 
     struct Node {
         KCASLockFree<1> initKcas;
-        volatile char padding0[PADDING_BYTES];
+        volatile char padding0[PADDING_BYTES - (sizeof(casword_t) * 4)];
         casword_t prev; 
         casword_t next;
         casword_t data;
@@ -30,8 +28,7 @@ private:
 
         // Constructor for an empty node that will be connected
         // at a later point (like the head and tail node)
-        Node(int tid, casword_t d) 
-        {
+        Node(int tid, casword_t d) {
             initKcas.writeInitPtr(tid, &next, (casword_t) NULL);
             initKcas.writeInitPtr(tid, &prev, (casword_t) NULL);
             initKcas.writeInitVal(tid, &data, d);
@@ -58,7 +55,14 @@ DoublyLinkedList::DoublyLinkedList(const int _numThreads, const int _minKey, con
     : numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey){
     
     head = new Node(0, (casword_t) minKey);
-    tail = new Node(0, (casword_t) maxKey);
+    tail = new Node(0, maxKey);
+
+    cout << tail->data << endl;
+
+    cout << maxKey << endl;
+    cout << (casword_t) maxKey << endl;
+    cout << (int) kcas.readVal(0, &head->data) << endl;
+    cout << kcas.readPtr(0, &tail->data) << endl;
 
     // Effectively head->next = tail;
     auto descPtrHead = kcas.getDescriptor(0);
