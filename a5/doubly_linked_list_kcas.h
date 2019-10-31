@@ -116,7 +116,7 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
     }
     else {
         delete newNode;
-        insertIfAbsent(tid, key);
+        return false;
     }
 
     return false;
