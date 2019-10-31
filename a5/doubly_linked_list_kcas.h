@@ -13,25 +13,24 @@ private:
 
     struct Node {
         KCASLockFree<1> initKcas;
-        volatile char padding0[PADDING_BYTES - (sizeof(casword_t) * 4)];
         casword_t prev; 
         casword_t next;
-        casword_t data;
+        int data;
         casword_t mark;
 
-        Node(int tid, Node * p, Node * n, casword_t d) {
+        Node(int tid, Node * p, Node * n, int d) {
             initKcas.writeInitPtr(tid, &next, (casword_t) n);
             initKcas.writeInitPtr(tid, &prev, (casword_t) p);
-            initKcas.writeInitVal(tid, &data, d);
+            data = d;
             initKcas.writeInitVal(tid, &mark, (casword_t) false);
         }
 
         // Constructor for an empty node that will be connected
         // at a later point (like the head and tail node)
-        Node(int tid, casword_t d) {
+        Node(int tid, int d) {
             initKcas.writeInitPtr(tid, &next, (casword_t) NULL);
             initKcas.writeInitPtr(tid, &prev, (casword_t) NULL);
-            initKcas.writeInitVal(tid, &data, d);
+            data = d;
             initKcas.writeInitVal(tid, &mark, (casword_t) false);
         }
     };
@@ -54,23 +53,15 @@ public:
 DoublyLinkedList::DoublyLinkedList(const int _numThreads, const int _minKey, const int _maxKey)
     : numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey){
     
-    head = new Node(0, (casword_t) minKey);
-    tail = new Node(0, maxKey);
-
-    cout << tail->data << endl;
-
-    cout << maxKey << endl;
-    cout << (casword_t) maxKey << endl;
-    cout << (int) kcas.readVal(0, &head->data) << endl;
-    cout << kcas.readPtr(0, &tail->data) << endl;
-
+    head = new Node(0, minKey);
+    tail = new Node(0, maxKey + 1);
+    
     // Effectively head->next = tail;
     auto descPtrHead = kcas.getDescriptor(0);
     descPtrHead->addPtrAddr(&head->next, (casword_t) NULL, (casword_t) tail);
     if(!kcas.execute(0, descPtrHead)) {
         assert(false); // Something went wrong!
     }
-
 
     // Effectively tail->prev = head;
     auto descPtrTail = kcas.getDescriptor(0);
@@ -90,18 +81,11 @@ bool DoublyLinkedList::contains(const int tid, const int & key) {
 
     // Loop from the left of the list until we find the value. 
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue) {
-        if (key == indexValue) {
+    while (key >= currentNode->data && (key < tail->data)) {
+        if (key == currentNode->data) {
             return true;
         }
-        if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
-            currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
-        }
-        else {
-            return false;
-        }
+        currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
     };
     return false;
 }
@@ -109,25 +93,17 @@ bool DoublyLinkedList::contains(const int tid, const int & key) {
 bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
     assert(key > minKey - 1 && key >= minKey && key <= maxKey && key < maxKey + 1);
 
-    // Loop from the left of the list until we find the value. 
+    // Loop from the left of the list until we find the value.
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue) {
-        if (key == indexValue) {
+    while (key >= currentNode->data && (key < tail->data)) {
+        if (key == currentNode->data) {
             return false; // key already exists
         }
-        if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
-            currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
-        }
-        // There are no keys in the list that are as big as key (assert false as this should never happen.)
-        else {
-            assert(false);
-        }
+        currentNode = (Node *) kcas.readPtr(tid, &currentNode->next); // Cant be tail as we have tail for that!
     };
 
     Node * prevNode = (Node *) kcas.readPtr(tid, &currentNode->prev);
-    Node * newNode = new Node(tid, prevNode, currentNode, (casword_t) key);
+    Node * newNode = new Node(tid, prevNode, currentNode, key);
     
     auto descPtr = kcas.getDescriptor(tid);
     descPtr->addValAddr(&prevNode->mark, false, false);
@@ -140,6 +116,7 @@ bool DoublyLinkedList::insertIfAbsent(const int tid, const int & key) {
     }
     else {
         delete newNode;
+        insertIfAbsent(tid, key);
     }
 
     return false;
@@ -150,9 +127,8 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
 
     // Loop from the left of the list until we find the value. 
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue && (key < maxKey)) {
-        if (key == indexValue) {
+    while (key >= currentNode->data && (key < tail->data)) {
+        if (key == currentNode->data) {
             // This where we do the delete!
             Node * prevNode = (Node *) kcas.readPtr(tid, &currentNode->prev);
             Node * nextNode = (Node *) kcas.readPtr(tid, &currentNode->next);
@@ -169,14 +145,7 @@ bool DoublyLinkedList::erase(const int tid, const int & key) {
             }
             return false;
         }
-        else if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
-            currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
-        }
-        // There are no keys in the list that are as big as key (assert false as this should never happen.)
-        else {
-            assert(false);
-        }
+        currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
     };
     return false;
 }
@@ -185,8 +154,8 @@ long DoublyLinkedList::getSumOfKeys() {
     // Loop from the left of the list, adding all values. 
     Node * currentNode = head;
     long sum = 0;
-    while(kcas.readVal(0, &currentNode->data) < maxKey) {
-        sum += (long) kcas.readVal(0, &currentNode->data);
+    while(currentNode->data < tail->data) {
+        sum += currentNode->data;
         currentNode = (Node *) kcas.readPtr(0, &currentNode->next);
     };
     return sum;

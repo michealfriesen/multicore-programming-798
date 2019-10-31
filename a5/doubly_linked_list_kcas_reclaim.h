@@ -16,23 +16,22 @@ private:
     
     struct Node {
         KCASLockFree<1> initKcas;
-        volatile char padding0[PADDING_BYTES - (sizeof(casword_t) * 4)];
         casword_t prev; 
         casword_t next;
-        casword_t data;
+        int data;
         casword_t mark;
 
         void setup(int tid, casword_t d) {
             initKcas.writeInitPtr(tid, &next, (casword_t) NULL);
             initKcas.writeInitPtr(tid, &prev, (casword_t) NULL);
-            initKcas.writeInitVal(tid, &data, d);
+            data = d;
             initKcas.writeInitVal(tid, &mark, (casword_t) false);
         }
 
         void setup(int tid, Node * p, Node * n, casword_t d) {
             initKcas.writeInitPtr(tid, &next, (casword_t) n);
             initKcas.writeInitPtr(tid, &prev, (casword_t) p);
-            initKcas.writeInitVal(tid, &data, d);
+            data = d;
             initKcas.writeInitVal(tid, &mark, (casword_t) false);
         }
     };
@@ -63,7 +62,7 @@ DoublyLinkedListReclaim::DoublyLinkedListReclaim(const int _numThreads, const in
     head->setup(0, minKey);
         
     tail = recmgr->allocate<Node>(0);
-    tail->setup(0, maxKey);
+    tail->setup(0, maxKey + 1);
 
     // Effectively head->next = tail;
     auto descPtrHead = kcas.getDescriptor(0);
@@ -78,9 +77,6 @@ DoublyLinkedListReclaim::DoublyLinkedListReclaim(const int _numThreads, const in
     if(!kcas.execute(0, descPtrTail)) {
         assert(false); // Something went wrong!
     }
-
-    // cout << kcas.readVal(0, &head->data) << endl;
-    // cout << kcas.readVal(0, &tail->data) << endl;
 }
 
 DoublyLinkedListReclaim::~DoublyLinkedListReclaim() {
@@ -103,14 +99,12 @@ bool DoublyLinkedListReclaim::contains(const int tid, const int & key) {
 
     // Loop from the left of the list until we find the value. 
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue) {
-        if (key == indexValue) {
+    while (key >= currentNode->data) {
+        if (key == currentNode->data) {
             return true;
         }
         if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
             currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
         }
         else {
             return false;
@@ -125,24 +119,16 @@ bool DoublyLinkedListReclaim::insertIfAbsent(const int tid, const int & key) {
     recmgr->getGuard(tid);
     // Loop from the left of the list until we find the value. 
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue) {
-        if (key == indexValue) {
+    while (key >= currentNode->data && (key < tail->data)) {
+        if (key == currentNode->data) {
             return false; // key already exists
         }
-        if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
-            currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
-        }
-        // There are no keys in the list that are as big as key (assert false as this should never happen.)
-        else {
-            assert(false);
-        }
+        currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
     };
 
     Node * prevNode = (Node *) kcas.readPtr(tid, &currentNode->prev);
     Node * newNode = recmgr->allocate<Node>(tid); 
-    newNode->setup(tid, prevNode, currentNode, (casword_t) key);
+    newNode->setup(tid, prevNode, currentNode, key);
     
     auto descPtr = kcas.getDescriptor(tid);
     descPtr->addValAddr(&prevNode->mark, false, false);
@@ -166,9 +152,8 @@ bool DoublyLinkedListReclaim::erase(const int tid, const int & key) {
     recmgr->getGuard(tid);
     // Loop from the left of the list until we find the value. 
     Node * currentNode = head;
-    int indexValue = (int) kcas.readVal(tid, &currentNode->data);
-    while (key >= indexValue && (key < maxKey)) {
-        if (key == indexValue) {
+    while (key >= currentNode->data && (key < tail->data)) {
+        if (key == currentNode->data) {
             // This where we do the delete!
             Node * prevNode = (Node *) kcas.readPtr(tid, &currentNode->prev);
             Node * nextNode = (Node *) kcas.readPtr(tid, &currentNode->next);
@@ -187,14 +172,7 @@ bool DoublyLinkedListReclaim::erase(const int tid, const int & key) {
             }
             return false;
         }
-        else if ((bool) kcas.readVal(tid, &currentNode->next) != NULL) {
-            currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
-            indexValue = kcas.readVal(tid, &currentNode->data);
-        }
-        // There are no keys in the list that are as big as key (assert false as this should never happen.)
-        else {
-            assert(false);
-        }
+        currentNode = (Node *) kcas.readPtr(tid, &currentNode->next);
     };
     return false;
 }
@@ -204,8 +182,8 @@ long DoublyLinkedListReclaim::getSumOfKeys() {
     // Loop from the left of the list, adding all values. 
     Node * currentNode = head;
     long sum = 0;
-    while(kcas.readVal(0, &currentNode->data) < maxKey) {
-        sum += (long) kcas.readVal(0, &currentNode->data);
+    while(currentNode->data < tail->data) {
+        sum += currentNode->data;
         currentNode = (Node *) kcas.readPtr(0, &currentNode->next);
     };
     return sum;
