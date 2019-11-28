@@ -3,13 +3,10 @@
 #include <cassert>
 
 /***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
-#define MAX_KCAS 1
+#define MAX_KCAS 5
 /***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
-
 #include "../kcas/kcas.h"
 
-
-using namespace std;
 class ExternalKCAS {
 private:
     struct Node {
@@ -48,9 +45,9 @@ private:
     volatile char padding1[PADDING_BYTES];
     Node * root;
     volatile char padding2[PADDING_BYTES];
-
+ 
 public:
-	ExternalKCAS(const int _numThreads, const int _minKey, const int _maxKey);
+    ExternalKCAS(const int _numThreads, const int _minKey, const int _maxKey);
     ~ExternalKCAS();
     long compareTo(int a, int b);
     bool contains(const int tid, const int & key);
@@ -64,6 +61,7 @@ private:
     auto createLeaf(int key);
     void freeSubtree(const int tid, Node * node);
     long getSumOfKeysInSubtree(Node * node);
+
 };
 
 auto ExternalKCAS::createInternal(int key, Node * left, Node * right) {
@@ -80,7 +78,10 @@ auto ExternalKCAS::createLeaf(int key) {
 }
 
 ExternalKCAS::ExternalKCAS(const int _numThreads, const int _minKey, const int _maxKey)
-        : numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey) {                  
+: numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey) {
+    auto rootLeft = createLeaf(minKey - 1);
+    auto rootRight = createLeaf(maxKey + 1);
+    root = createInternal(minKey - 1, rootLeft, rootRight);
 }
 
 ExternalKCAS::~ExternalKCAS() {
@@ -185,9 +186,10 @@ long ExternalKCAS::getSumOfKeysInSubtree(Node * node) {
                 + getSumOfKeysInSubtree(node->right);
     }
 }
-
 long ExternalKCAS::getSumOfKeys() {
     return getSumOfKeysInSubtree(root);
+}
+void ExternalKCAS::printDebuggingDetails() {
 }
 
 void ExternalKCAS::freeSubtree(const int tid, Node * node) {
@@ -196,6 +198,3 @@ void ExternalKCAS::freeSubtree(const int tid, Node * node) {
     freeSubtree(tid, node->right);
     delete node;
 }
-
-
-void ExternalKCAS::printDebuggingDetails() {}
