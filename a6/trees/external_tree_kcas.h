@@ -173,7 +173,7 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
             bool nMark = ret.n->marked;
 	    	bool pMark = ret.p->marked;
 			kcas::start();
-            kcas::add(i
+            kcas::add(
                 &ret.n->marked, nMark, true,
                 &ret.p->marked, pMark, true,
 				&ret.gp->marked, false, false
