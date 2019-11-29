@@ -1,11 +1,14 @@
 #pragma once
 
 #include <cassert>
+#include <iostream>
 
 /***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
-#define MAX_KCAS 5
+#define MAX_KCAS 6
 /***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
 #include "../kcas/kcas.h"
+
+using namespace std;
 
 enum DIRECTION {
     LEFT,
@@ -167,38 +170,50 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
         auto pDir = ret.p->whichParent(ret.n);
 
         if (gpDir != NEITHER && pDir != NEITHER) {
-            kcas::start();
+            bool nMark = ret.n->marked;
+	    bool pMark = ret.p->marked;
+		kcas::start();
             kcas::add(
-                &ret.n->marked, false, true,
-                &ret.p->marked, false, true
+                &ret.n->marked, nMark, true,
+                &ret.p->marked, pMark, true,
+		&ret.gp->marked, false, false
             );
-
+	
+	    Node * sib;
             if (gpDir == LEFT) {
                 if (pDir == LEFT) {
+		    sib = ret.p->right;
                     kcas::add(
                         &ret.p->left, ret.n, ret.n,
-                        &ret.gp->left, ret.p, (Node *) ret.p->right
+                        &ret.gp->left, ret.p, sib,
+			&ret.p->right, sib, sib
                     );
                 }
                 else if (pDir == RIGHT) {
+		    sib = ret.p->left;
                     kcas::add(
                         &ret.p->right, ret.n, ret.n,
-                        &ret.gp->left, ret.p, (Node *) ret.p->left
+                        &ret.gp->left, ret.p, sib,
+			&ret.p->left, sib, sib
                     );
                 } 
             }
             
             else if (gpDir == RIGHT) {
                 if (pDir == LEFT) {
+		    sib = ret.p->right;
                     kcas::add(
                         &ret.p->left, ret.n, ret.n,
-                        &ret.gp->right, ret.p, (Node *) ret.p->right
+                        &ret.gp->right, ret.p, sib,
+			&ret.p->right, sib, sib
                     );
                 }
                 else if (pDir == RIGHT) {
+		    sib = ret.p->left;
                     kcas::add(
                         &ret.p->right, ret.n, ret.n,
-                        &ret.gp->right, ret.p, (Node *) ret.p->left
+                        &ret.gp->right, ret.p, sib,
+			&ret.p->left, sib, sib
                     );
                 } 
             }
@@ -207,7 +222,10 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
                 // // need safe memory reclamation here (in addition to a valid atomic block) if we have multiple threads
                 // delete ret.p;
                 // delete ret.n;
-            } 
+            }
+	    else {
+		// cout << "kcas failed." << endl;
+	    } 
         }
     }
 }
