@@ -2,10 +2,6 @@
 
 #include <cassert>
 
-/***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE****/
-#define MAX_KCAS 1
-/***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
-
 #include "../kcas/kcas.h"
 #include "../recordmgr/record_manager.h"
 

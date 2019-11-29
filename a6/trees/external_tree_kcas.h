@@ -7,13 +7,19 @@
 /***CHANGE THIS VALUE TO YOUR LARGEST KCAS SIZE ****/
 #include "../kcas/kcas.h"
 
+enum DIRECTION {
+    LEFT,
+    RIGHT,
+    NEITHER
+};
+
 class ExternalKCAS {
 private:
     struct Node {
         int key;
-        Node * left;
-        Node * right;
-        bool marked;
+        casword<Node *> left;
+        casword<Node *> right;
+        casword<bool> marked;
 
         
         bool isLeaf() {
@@ -23,6 +29,12 @@ private:
         }
         bool isParentOf(Node * other) {
             return (left == other || right == other);
+        }
+
+        DIRECTION whichParent(Node * other) {
+            if (other == left) return LEFT;
+            if (other == right) return RIGHT;
+            return NEITHER;
         }
     };
     
@@ -55,6 +67,7 @@ public:
     bool erase(const int tid, const int & key); // try to erase key; return true if successful, false otherwise
     long getSumOfKeys(); // should return the sum of all keys in the set
     void printDebuggingDetails(); // print any debugging details you want at the end of a trial in this function
+
 private:
     auto search(const int tid, const int & key);
     auto createInternal(int key, Node * left, Node * right);
@@ -67,9 +80,9 @@ private:
 auto ExternalKCAS::createInternal(int key, Node * left, Node * right) {
     Node * node = new Node();
     node->key = key;
-    node->left = left;
-    node->right = right;
-    node->marked = false;
+    node->left.setInitVal(left);
+    node->right.setInitVal(right);
+    node->marked.setInitVal(false);
     return node;
 }
 
@@ -120,55 +133,85 @@ bool ExternalKCAS::insertIfAbsent(const int tid, const int & key) {
         auto na = createLeaf(key);
         auto leftChild = (dir <= 0) ? na : ret.n;
         auto rightChild = (dir <= 0) ? ret.n : na;
-        auto n1 = createInternal(std::min(key, ret.n->key), leftChild, rightChild);
-        //atomic {
-            if (!ret.p->marked && ret.p->isParentOf(ret.n)) {
-                // change child
-                if (ret.p->left == ret.n) {
-                    ret.p->left = n1;
-                    return true;
-                } else {
-                    assert(ret.p->right == ret.n);
-                    ret.p->right = n1;
-                    return true;
-                }
-            } else {
-                // even in a concurrent setting, no other thread can have access to n1 or na here, so we can just delete/free
+        auto n1 = createInternal(std::min(key, (int) ret.n->key), leftChild, rightChild);
+
+        kcas::start();
+        kcas::add(&ret.p->marked, false, false);
+
+        auto direction = ret.p->whichParent(ret.n);
+        if (direction == LEFT) kcas::add(&ret.p->left, ret.n, n1);
+        else if (direction == RIGHT) kcas::add(&ret.p->right, ret.n, n1);
+        if (direction != NEITHER) {
+            if (kcas::execute()) return true;
+            else {
                 delete n1;
                 delete na;
             }
-        //}
+        }
+        else {
+            delete n1;
+            delete na;
+        }
     }
 }
 
 bool ExternalKCAS::erase(const int tid, const int & key) {
+    // return false;
     assert(key <= maxKey);
     while (true) {
         auto ret = search(tid, key);
         auto dir = compareTo(key, ret.n->key);
         if (dir != 0) return false;
-        //atomic {
-            if (ret.gp->isParentOf(ret.p) && ret.p->isParentOf(ret.n) && !ret.gp->marked) {
-                ret.n->marked = true;
-                ret.p->marked = true;
-                // change appropriate child pointer of gp from p to n's sibling
-                auto sibling = (ret.p->left == ret.n) ? ret.p->right : ret.p->left;
-                if (ret.gp->left == ret.p) {
-                    ret.gp->left = sibling;
-                } else {
-                    assert(ret.gp->right == ret.p);
-                    ret.gp->right = sibling;
-                }
-                // need safe memory reclamation here (in addition to a valid atomic block) if we have multiple threads
-                delete ret.p;
-                delete ret.n;
 
-                return true;
+        auto gpDir = ret.gp->whichParent(ret.p);
+        auto pDir = ret.p->whichParent(ret.n);
+
+        if (gpDir != NEITHER && pDir != NEITHER) {
+            kcas::start();
+            kcas::add(
+                &ret.n->marked, false, true,
+                &ret.p->marked, false, true
+            );
+
+            if (gpDir == LEFT) {
+                if (pDir == LEFT) {
+                    kcas::add(
+                        &ret.p->left, ret.n, ret.n,
+                        &ret.gp->left, ret.p, (Node *) ret.p->right
+                    );
+                }
+                else if (pDir == RIGHT) {
+                    kcas::add(
+                        &ret.p->right, ret.n, ret.n,
+                        &ret.gp->left, ret.p, (Node *) ret.p->left
+                    );
+                } 
             }
-        //}
+            
+            else if (gpDir == RIGHT) {
+                if (pDir == LEFT) {
+                    kcas::add(
+                        &ret.p->left, ret.n, ret.n,
+                        &ret.gp->right, ret.p, (Node *) ret.p->right
+                    );
+                }
+                else if (pDir == RIGHT) {
+                    kcas::add(
+                        &ret.p->right, ret.n, ret.n,
+                        &ret.gp->right, ret.p, (Node *) ret.p->left
+                    );
+                } 
+            }
+            if (kcas::execute()) {
+                return true;
+                // // need safe memory reclamation here (in addition to a valid atomic block) if we have multiple threads
+                // delete ret.p;
+                // delete ret.n;
+            } 
+        }
     }
-    return false;
 }
+
 
 long ExternalKCAS::getSumOfKeysInSubtree(Node * node) {
     if (node == NULL) return 0;
