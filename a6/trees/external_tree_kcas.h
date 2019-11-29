@@ -171,49 +171,49 @@ bool ExternalKCAS::erase(const int tid, const int & key) {
 
         if (gpDir != NEITHER && pDir != NEITHER) {
             bool nMark = ret.n->marked;
-	    bool pMark = ret.p->marked;
-		kcas::start();
-            kcas::add(
+	    	bool pMark = ret.p->marked;
+			kcas::start();
+            kcas::add(i
                 &ret.n->marked, nMark, true,
                 &ret.p->marked, pMark, true,
-		&ret.gp->marked, false, false
+				&ret.gp->marked, false, false
             );
 	
 	    Node * sib;
             if (gpDir == LEFT) {
                 if (pDir == LEFT) {
-		    sib = ret.p->right;
+		    		sib = ret.p->right;
                     kcas::add(
                         &ret.p->left, ret.n, ret.n,
                         &ret.gp->left, ret.p, sib,
-			&ret.p->right, sib, sib
+						&ret.p->right, sib, sib
                     );
                 }
                 else if (pDir == RIGHT) {
-		    sib = ret.p->left;
+		    		sib = ret.p->left;
                     kcas::add(
                         &ret.p->right, ret.n, ret.n,
                         &ret.gp->left, ret.p, sib,
-			&ret.p->left, sib, sib
+						&ret.p->left, sib, sib
                     );
                 } 
             }
             
             else if (gpDir == RIGHT) {
                 if (pDir == LEFT) {
-		    sib = ret.p->right;
+		    		sib = ret.p->right;
                     kcas::add(
                         &ret.p->left, ret.n, ret.n,
                         &ret.gp->right, ret.p, sib,
-			&ret.p->right, sib, sib
+						&ret.p->right, sib, sib
                     );
                 }
                 else if (pDir == RIGHT) {
-		    sib = ret.p->left;
+		    		sib = ret.p->left;
                     kcas::add(
                         &ret.p->right, ret.n, ret.n,
                         &ret.gp->right, ret.p, sib,
-			&ret.p->left, sib, sib
+						&ret.p->left, sib, sib
                     );
                 } 
             }
