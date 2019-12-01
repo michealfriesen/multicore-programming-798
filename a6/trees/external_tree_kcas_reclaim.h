@@ -56,7 +56,7 @@ private:
 public:
     ExternalKCASReclaim(const int _numThreads, const int _minKey, const int _maxKey);
     ~ExternalKCASReclaim();
-    long compareTo(int a, int b);
+    long compareTo(const int tid, int a, int b);
     bool contains(const int tid, const int & key);
     bool insertIfAbsent(const int tid, const int & key); // try to insert key; return true if successful (if it doesn't already exist), false otherwise
     bool erase(const int tid, const int & key); // try to erase key; return true if successful, false otherwise
@@ -97,12 +97,11 @@ ExternalKCASReclaim::~ExternalKCASReclaim() {
     delete recmgr;
 }
 
-inline long ExternalKCASReclaim::compareTo(int a, int b) {
+inline long ExternalKCASReclaim::compareTo(const int tid, int a, int b) {
     return ((long)a - (long)b); // casts to guarantee correct behaviour with large negative numbers
 }
 
 inline auto ExternalKCASReclaim::search(const int tid, const int & key) {
-    recmgr->getGuard(tid);
     Node * gp;
     Node * p = NULL;
     Node * n = root;
@@ -115,8 +114,6 @@ inline auto ExternalKCASReclaim::search(const int tid, const int & key) {
 }
 
 bool ExternalKCASReclaim::contains(const int tid, const int & key) {
-    recmgr->getGuard(tid);
-    assert(key <= maxKey);
     auto rec = search(tid, key);
     return (rec.n->key == key);
 }
@@ -126,7 +123,7 @@ bool ExternalKCASReclaim::insertIfAbsent(const int tid, const int & key) {
     assert(key <= maxKey);
     while (true) {
         auto ret = search(tid, key);
-        auto dir = compareTo(key, ret.n->key);
+        auto dir = compareTo(tid, key, ret.n->key);
         if (dir == 0) return false;
         // create two new nodes
         auto na = createLeaf(tid, key);
@@ -143,13 +140,13 @@ bool ExternalKCASReclaim::insertIfAbsent(const int tid, const int & key) {
         if (direction != NEITHER) {
             if (kcas::execute()) return true;
             else {
-                recmgr->deallocate(tid, n1);
-                recmgr->deallocate(tid, na);
+                recmgr->retire(tid, n1);
+                recmgr->retire(tid, na);
             }
         }
         else {
-            recmgr->deallocate(tid, n1);
-            recmgr->deallocate(tid, na);
+            recmgr->retire(tid, n1);
+            recmgr->retire(tid, na);
         }
     }
 }
@@ -159,7 +156,7 @@ bool ExternalKCASReclaim::erase(const int tid, const int & key) {
     assert(key <= maxKey);
     while (true) {
         auto ret = search(tid, key);
-        auto dir = compareTo(key, ret.n->key);
+        auto dir = compareTo(tid, key, ret.n->key);
         if (dir != 0) return false;
 
         auto gpDir = ret.gp->whichParent(ret.p);
