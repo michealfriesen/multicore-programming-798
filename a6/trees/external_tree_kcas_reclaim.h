@@ -73,7 +73,6 @@ private:
 };
 
 auto ExternalKCASReclaim::createInternal(const int tid, int key, Node * left, Node * right) {
-    recmgr->getGuard(tid);
     Node * node = recmgr->allocate<Node>(tid);
     node->key = key;
     node->left.setInitVal(left);
@@ -88,7 +87,6 @@ auto ExternalKCASReclaim::createLeaf(const int tid, int key) {
 
 ExternalKCASReclaim::ExternalKCASReclaim(const int _numThreads, const int _minKey, const int _maxKey)
 : numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey), recmgr(new simple_record_manager<Node>(MAX_THREADS)) {
-    recmgr->getGuard(0);
     auto rootLeft = createLeaf(0, minKey - 1);
     auto rootRight = createLeaf(0, maxKey + 1);
     root = createInternal(0, minKey - 1, rootLeft, rootRight);
