@@ -6,12 +6,6 @@
 
 using namespace std;
 
-enum DIRECTION {
-    LEFT,
-    RIGHT,
-    NEITHER
-};
-
 class ExternalKCASReclaim {
 private:
     struct Node {
@@ -71,14 +65,15 @@ public:
 
 private:
     auto search(const int tid, const int & key);
-    auto createInternal(int key, Node * left, Node * right);
-    auto createLeaf(int key);
+    auto createInternal(const int tid, int key, Node * left, Node * right);
+    auto createLeaf(const int tid, int key);
     void freeSubtree(const int tid, Node * node);
     long getSumOfKeysInSubtree(Node * node);
 
 };
 
-auto ExternalKCASReclaim::createInternal(int key, Node * left, Node * right) {
+auto ExternalKCASReclaim::createInternal(const int tid, int key, Node * left, Node * right) {
+    recmgr->getGuard(tid);
     Node * node = recmgr->allocate<Node>(tid);
     node->key = key;
     node->left.setInitVal(left);
@@ -87,15 +82,16 @@ auto ExternalKCASReclaim::createInternal(int key, Node * left, Node * right) {
     return node;
 }
 
-auto ExternalKCASReclaim::createLeaf(int key) {
-    return createInternal(key, NULL, NULL);
+auto ExternalKCASReclaim::createLeaf(const int tid, int key) {
+    return createInternal(tid, key, NULL, NULL);
 }
 
 ExternalKCASReclaim::ExternalKCASReclaim(const int _numThreads, const int _minKey, const int _maxKey)
-: numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey) {
-    auto rootLeft = createLeaf(minKey - 1);
-    auto rootRight = createLeaf(maxKey + 1);
-    root = createInternal(minKey - 1, rootLeft, rootRight);
+: numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey), recmgr(new simple_record_manager<Node>(MAX_THREADS)) {
+    recmgr->getGuard(0);
+    auto rootLeft = createLeaf(0, minKey - 1);
+    auto rootRight = createLeaf(0, maxKey + 1);
+    root = createInternal(0, minKey - 1, rootLeft, rootRight);
 }
 
 ExternalKCASReclaim::~ExternalKCASReclaim() {
@@ -108,6 +104,7 @@ inline long ExternalKCASReclaim::compareTo(int a, int b) {
 }
 
 inline auto ExternalKCASReclaim::search(const int tid, const int & key) {
+    recmgr->getGuard(tid);
     Node * gp;
     Node * p = NULL;
     Node * n = root;
@@ -134,10 +131,10 @@ bool ExternalKCASReclaim::insertIfAbsent(const int tid, const int & key) {
         auto dir = compareTo(key, ret.n->key);
         if (dir == 0) return false;
         // create two new nodes
-        auto na = createLeaf(key);
+        auto na = createLeaf(tid, key);
         auto leftChild = (dir <= 0) ? na : ret.n;
         auto rightChild = (dir <= 0) ? ret.n : na;
-        auto n1 = createInternal(std::min(key, (int) ret.n->key), leftChild, rightChild);
+        auto n1 = createInternal(tid, std::min(key, (int) ret.n->key), leftChild, rightChild);
 
         kcas::start();
         kcas::add(&ret.p->marked, false, false);
@@ -148,19 +145,18 @@ bool ExternalKCASReclaim::insertIfAbsent(const int tid, const int & key) {
         if (direction != NEITHER) {
             if (kcas::execute()) return true;
             else {
-                delete n1;
-                delete na;
+                recmgr->deallocate(tid, n1);
+                recmgr->deallocate(tid, na);
             }
         }
         else {
-            delete n1;
-            delete na;
+            recmgr->deallocate(tid, n1);
+            recmgr->deallocate(tid, na);
         }
     }
 }
 
 bool ExternalKCASReclaim::erase(const int tid, const int & key) {
-
     recmgr->getGuard(tid);
     assert(key <= maxKey);
     while (true) {
