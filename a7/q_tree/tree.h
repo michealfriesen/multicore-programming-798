@@ -37,9 +37,8 @@ private:
     Node * root;
     volatile char padding2[PADDING_BYTES];
 
-    // suggestion: place your lock to be used for TLE here (see util.h for a lock implementation)
-    // be sure to add padding as appropriate! you REALLY want to ensure there's NO false sharing on your lock.
-    
+    TryLock * globalLock;
+
     volatile char padding3[PADDING_BYTES];
  
 public:
@@ -69,7 +68,7 @@ private:
 };
 
 ExternalBST::ExternalBST(const int _numThreads, const int _minKey, const int _maxKey)
-: numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey) {
+: numThreads(_numThreads), minKey(_minKey), maxKey(_maxKey), globalLock(new TryLock()) {
     Node * rootLeft = createLeaf(minKey - 1);
     Node * rootRight = createLeaf(maxKey + 1);
     root = createInternal(minKey - 1, rootLeft, rootRight);
@@ -79,15 +78,57 @@ ExternalBST::~ExternalBST() {
 }
 
 bool ExternalBST::contains(const int tid, const int & key) {
-    return sequentialContains(tid, key);
+    int retriesLeft = MAX_RETRIES;
+retryContains:
+    if (_xbegin() == _XBEGIN_STARTED ) {
+	if (globalLock->isHeld()) _xabort(1);
+	bool result = sequentialContains(tid, key);
+	_xend();
+	return result;
+    } else {
+	while (globalLock->isHeld()){} // Do nothing as we want to ensure the lock isnt held so the fast path doesnt auto fail...
+    	if (--retriesLeft > 0) goto retryContains;
+	globalLock->acquire();
+	bool result = sequentialContains(tid, key);
+	globalLock->release();
+	return result;
+    }
 }
 
 bool ExternalBST::insertIfAbsent(const int tid, const int & key) {
-    return sequentialInsertIfAbsent(tid, key);
+    int retriesLeft = MAX_RETRIES;
+retryInsert:
+    if (_xbegin() == _XBEGIN_STARTED)  {
+	if (globalLock->isHeld()) _xabort(1);
+	bool result = sequentialInsertIfAbsent(tid, key);
+	_xend();
+	return result;
+    } else {
+	while (globalLock->isHeld()){} // Do nothing as we want to ensure the lock isnt held so the fast path doesnt auto fail...
+    	if (--retriesLeft > 0) goto retryInsert;
+	globalLock->acquire();
+	bool result = sequentialInsertIfAbsent(tid, key);
+	globalLock->release();
+	return result;
+    }
 }
 
 bool ExternalBST::erase(const int tid, const int & key) {
-    return sequentialErase(tid, key);
+    int retriesLeft = MAX_RETRIES;
+retryDelete:
+    if (_xbegin() == _XBEGIN_STARTED) {
+	if (globalLock->isHeld()) _xabort(1);
+	bool result = sequentialErase(tid, key);
+	_xend();
+	return result;
+    } else {
+	while (globalLock->isHeld()){} // Do nothing as we want to ensure the lock isnt held so the fast path doesnt auto fail...
+    	if (--retriesLeft > 0) goto retryDelete;
+	globalLock->acquire();
+	bool result = sequentialErase(tid, key);
+	globalLock->release();
+	return result;
+    }
 }
 
 ExternalBST::SearchRecord ExternalBST::search(const int tid, const int & key) {
@@ -156,9 +197,11 @@ ExternalBST::Node * ExternalBST::createInternal(int key, Node * left, Node * rig
     node->right = right;
     return node;
 }
+
 ExternalBST::Node * ExternalBST::createLeaf(int key) {
     return createInternal(key, NULL, NULL);
 }
+
 void ExternalBST::freeSubtree(Node * node) {
     if (node == NULL) return;
     freeSubtree(node->left);
